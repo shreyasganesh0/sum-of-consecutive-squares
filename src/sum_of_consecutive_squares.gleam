@@ -2,7 +2,14 @@ import argv
 import gleam/io
 import gleam/int
 import gleam/string
+import gleam/list
 import gleam/result
+
+import gleam/otp/static_supervisor as supervisor
+import gleam/otp/supervision
+
+import worker
+
 
 pub type ParseError {
     NotEnoughArgs(required: Int)
@@ -47,6 +54,20 @@ pub fn calc_sum_of_squares(num1: Int, num2: Int) -> Result(Int, ParseError) {
     |>string.append("Numbers paresd are: ", _)
     |>string.append(int.to_string(num2))
     |>io.println
+
+    //let num_cores = system.schedulers_online()
+
+    let num_workers = num2 / 100
+
+    let worker_list = list.range(0, num_workers)
+    io.println("Number of availble workers: " <> int.to_string(num_workers))
+
+    let assert Ok(_) = supervisor.new(strategy: supervisor.OneForOne)
+  //|>supervisor.add(master.get_supervision_spec())
+    |>list.fold(worker_list, _, fn(builder, _) -> supervisor.Builder {
+        supervisor.add(builder, supervision.worker(worker.get_supervision_spec))
+        })
+    |>supervisor.start
 
     Ok(0)
 }
