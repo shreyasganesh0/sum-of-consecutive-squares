@@ -1,4 +1,5 @@
 import gleam/io
+import gleam/int
 
 import gleam/otp/actor
 import gleam/erlang/process
@@ -7,35 +8,42 @@ pub type Message {
 
     Shutdown
 
-    Calculate(value: Int, reply_to: process.Subject(Message))
+    Calculate(reply_to: process.Subject(Message), value: Int)
 
-    Check(is_valid: Bool)
+    Check(checked_num: Int)
 }
 
-pub fn get_supervision_spec() -> Result(actor.Started(process.Subject(Message)), actor.StartError) {
+pub fn start() -> Result(actor.Started(process.Subject(Message)), actor.StartError) {
+
+    io.println("Starting worker")
 
     actor.new(Nil)
     |> actor.on_message(handle_worker_messages)
     |> actor.start
+
 }
 
 fn handle_worker_messages (
     _state: Nil,
     message: Message,
     ) -> actor.Next(Nil, Message) {
+
+    io.println("Started actor")
     
     case message {
 
         Shutdown -> actor.stop()
 
-        Calculate(val, _) -> {
-            io.println("Recieved the Calculate Message")
+        Calculate(subject, val) -> {
+            io.println("Recieved the Calculate Message: " <> int.to_string(val))
             let _ = calc_sum_squares(val, 0)
-            actor.stop()
+            process.send(subject, Check(val))
+            actor.continue(Nil)
         }
 
         _ -> {
-            actor.stop()
+            io.println("worker recvd invalid message")
+            actor.continue(Nil)
         }
     }
 
