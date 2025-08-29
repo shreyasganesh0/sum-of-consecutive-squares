@@ -6,31 +6,51 @@ import gleam/erlang/process
 
 import worker.{type Message}
 
+type CoordState {
+
+    CoordState(
+        workers: List(process.Subject(worker.Message))
+    )
+}
+
 pub fn start() -> Result(actor.Started(process.Subject(Message)), actor.StartError) {
 
+    let coord_name = process.new_name("Coordinator")
+
+
     io.println("Starting coordinator")
-    let act = actor.new(Nil)
+    let act = actor.new_with_initialiser(10, init)
+    |> actor.named(coord_name)
     |> actor.on_message(handle_coord_message)
     |> actor.start
-
-    case act {
-
-        Ok(actor) -> {
-
-            process.send(actor.data, worker.Calculate(actor.data, 10))
-        }
-
-        Error(_) -> io.println("error starting coord")
-    }
 
     act
 
 }
 
+fn init(
+    sub: process.Subject(Message)
+    ) -> Result(
+        actor.Initialised(
+            CoordState, 
+            worker.Message, process.Subject(worker.Message)
+            ), 
+        String,
+        ) {
+
+    let init_state = CoordState([])
+
+    let init = actor.initialised(init_state)
+    |> actor.returning(sub)
+    io.println("registering coord finished init")
+
+    Ok(init)
+}
+
 fn handle_coord_message(
-    _state: Nil,
+    state: CoordState, 
     message: worker.Message
-    ) -> actor.Next(Nil, Message) {
+    ) -> actor.Next(CoordState, worker.Message) {
 
     case message {
 
@@ -45,14 +65,24 @@ fn handle_coord_message(
                 _ -> io.println("invalid number sent")
             }
 
-            actor.continue(Nil)
+            actor.continue(state)
 
+        }
+
+        worker.RegisterWorker(worker_subject) -> {
+
+            let new_state = CoordState(
+                workers: [worker_subject, ..state.workers]
+            )
+
+            io.println("added worker to state")
+            actor.continue(new_state)
         }
 
         _ -> {
 
             io.println("coordinator recvd invalid message")
-            actor.continue(Nil)
+            actor.continue(state)
         }
 
     }

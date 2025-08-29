@@ -63,12 +63,13 @@ pub fn calc_sum_of_squares(num1: Int, num2: Int) -> Result(Int, ParseError) {
     let worker_list = list.range(0, num_workers)
     io.println("Number of availble workers: " <> int.to_string(num_workers))
 
-    let assert Ok(_) = supervisor.new(strategy: supervisor.OneForOne)
+    let _ = supervisor.new(strategy: supervisor.OneForOne)
     |> supervisor.add(supervision.worker(coordinator.start))
     |> list.fold(worker_list, _, fn(builder, _) -> supervisor.Builder {
         supervisor.add(builder, supervision.worker(worker.start))
         })
     |> supervisor.start
+
 
     Ok(0)
 }

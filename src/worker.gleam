@@ -8,18 +8,45 @@ pub type Message {
 
     Shutdown
 
+    TryRegister(self_subject: process.Subject(Message))
+
+    RegisterWorker(worker_subject: process.Subject(Message))
+
     Calculate(reply_to: process.Subject(Message), value: Int)
 
     Check(checked_num: Int)
 }
 
+
 pub fn start() -> Result(actor.Started(process.Subject(Message)), actor.StartError) {
 
     io.println("Starting worker")
 
-    actor.new(Nil)
+    let act = actor.new_with_initialiser(10, init)
     |> actor.on_message(handle_worker_messages)
     |> actor.start
+
+    act
+
+}
+
+fn init(
+    sub: process.Subject(Message)
+    ) -> Result(
+        actor.Initialised(
+            Nil, 
+            Message, 
+            process.Subject(Message)), 
+        String) {
+
+    io.println("Sending coord registration from worker")
+
+    process.send(sub, TryRegister(sub))
+
+    let init = actor.initialised(Nil)
+    |> actor.returning(sub)
+
+    Ok(init)
 
 }
 
@@ -33,6 +60,14 @@ fn handle_worker_messages (
     case message {
 
         Shutdown -> actor.stop()
+
+        TryRegister(sub) -> {
+
+            process.new_name("Coordinator")
+            |> process.named_subject
+            |> process.send(RegisterWorker(sub))
+            actor.continue(Nil)
+        }
 
         Calculate(subject, val) -> {
             io.println("Recieved the Calculate Message: " <> int.to_string(val))
