@@ -1,5 +1,6 @@
 import gleam/io
 import gleam/int
+import gleam/list
 
 import gleam/otp/actor
 import gleam/erlang/process
@@ -9,17 +10,30 @@ import worker.{type Message}
 type CoordState {
 
     CoordState(
+        count: Int,
+        last_count: Int,
+        k: Int,
+        num_workers: Int,
+        curr_idx: Int,
+        start_num: Int,
         workers: List(process.Subject(worker.Message))
     )
 }
 
-pub fn start() -> Result(actor.Started(process.Subject(Message)), actor.StartError) {
+pub fn start(
+    count: Int, 
+    last_count: Int,
+    k: Int, 
+    num_workers: Int, 
+    ) -> Result(
+        actor.Started(process.Subject(Message)),
+        actor.StartError) {
 
     let coord_name = process.new_name("Coordinator")
 
+    io.println("[COORDINATOR]: starting coordinator")
 
-    io.println("Starting coordinator")
-    let act = actor.new_with_initialiser(10, init)
+    let act = actor.new_with_initialiser(10, fn(sub) {init(sub, count, last_count, k, num_workers)})
     |> actor.named(coord_name)
     |> actor.on_message(handle_coord_message)
     |> actor.start
@@ -29,7 +43,11 @@ pub fn start() -> Result(actor.Started(process.Subject(Message)), actor.StartErr
 }
 
 fn init(
-    sub: process.Subject(Message)
+    sub: process.Subject(Message),
+    count: Int,
+    last_count: Int,
+    k: Int,
+    num_workers: Int,
     ) -> Result(
         actor.Initialised(
             CoordState, 
@@ -38,11 +56,21 @@ fn init(
         String,
         ) {
 
-    let init_state = CoordState([])
+    io.println("[COORDINATOR]: initalising with:\n" <> "count: " <> int.to_string(count) <> "last_count: " <> int.to_string(last_count) <> "k: " <>int.to_string(k) <> "num_workers: " <> int.to_string(num_workers))
+
+    let init_state = CoordState(
+                        count: count,
+                        last_count: last_count,
+                        k: k,
+                        num_workers: num_workers,
+                        curr_idx: 1,
+                        start_num: 1,
+                        workers: []
+                    )
 
     let init = actor.initialised(init_state)
     |> actor.returning(sub)
-    io.println("registering coord finished init")
+    io.println("[COORDINATOR]: registering coord finished init")
 
     Ok(init)
 }
@@ -56,14 +84,14 @@ fn handle_coord_message(
 
         worker.Shutdown -> actor.stop()
 
-        worker.Check(checked_num) -> {
+        worker.Check(num_list) -> {
 
-            case checked_num {
+            io.println("[COORDINATOR]: rcvd check message from worker")
+            list.each(num_list, fn(a) {
 
-                num if num > 1 -> io.println("Found valid number" <> int.to_string(num))
-
-                _ -> io.println("invalid number sent")
-            }
+                                    io.println(int.to_string(a))
+                                }
+            )
 
             actor.continue(state)
 
@@ -71,12 +99,35 @@ fn handle_coord_message(
 
         worker.RegisterWorker(worker_subject) -> {
 
-            let new_state = CoordState(
-                workers: [worker_subject, ..state.workers]
-            )
+            io.println("[COORDINATOR]: added worker to state")
+            
+            process.send(worker_subject, worker.Calculate(state.k, state.count, state.start_num))
 
-            io.println("added worker to state")
-            actor.continue(new_state)
+            case state.curr_idx < {state.num_workers - 1} {
+
+                True -> { 
+                    let new_state = CoordState(
+                        ..state,
+                        curr_idx: state.curr_idx + 1,
+                        start_num: state.start_num + state.count,
+                        workers: [worker_subject, ..state.workers]
+                    )
+                    actor.continue(new_state)
+                }
+
+                False -> { // last worker
+                    let new_state = CoordState(
+                        ..state,
+                        count: state.last_count,
+                        curr_idx: state.curr_idx + 1,
+                        start_num: state.start_num + state.count,
+                        workers: [worker_subject, ..state.workers]
+                    )
+                    actor.continue(new_state)
+                }
+            }
+
+
         }
 
         _ -> {

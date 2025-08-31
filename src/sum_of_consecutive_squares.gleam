@@ -49,25 +49,40 @@ pub fn main() -> Result(Int, ParseError) {
 }
 
 
-pub fn calc_sum_of_squares(num1: Int, num2: Int) -> Result(Int, ParseError) {
+pub fn calc_sum_of_squares(n: Int, k: Int) -> Result(Int, ParseError) {
 
-    int.to_string(num1)
+    int.to_string(n)
     |>string.append("Numbers paresd are: ", _)
-    |>string.append(int.to_string(num2))
+    |>string.append(int.to_string(k))
     |>io.println
 
     //let num_cores = system.schedulers_online()
 
-    let num_workers = {num2 / 100} + 1
+    let num_workers = 8 // hardcoded for now
 
-    let worker_list = list.range(0, num_workers)
+    let count = n / num_workers
+    let last_count = count + {n % num_workers} 
+
+    let worker_list = list.range(1, num_workers)
+
     io.println("Number of availble workers: " <> int.to_string(num_workers))
 
     let _ = supervisor.new(strategy: supervisor.OneForOne)
-    |> supervisor.add(supervision.worker(coordinator.start))
+    |> supervisor.add(supervision.worker(fn() {coordinator.start(count,
+                                                                last_count,
+                                                                k,
+                                                                num_workers
+                                                                )
+                                        } 
+                                    )
+    )
     |> list.fold(worker_list, _, fn(builder, _) -> supervisor.Builder {
-        supervisor.add(builder, supervision.worker(worker.start))
-        })
+                                    supervisor.add(
+                                        builder,
+                                        supervision.worker(worker.start)
+                                    )
+                                }
+        )
     |> supervisor.start
 
 
