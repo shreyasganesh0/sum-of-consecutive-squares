@@ -1,4 +1,4 @@
-import gleam/io
+//import gleam/io
 import gleam/int
 import gleam/list
 import gleam/float
@@ -8,7 +8,7 @@ import gleam/erlang/process
 
 pub type WorkerState {
 
-    WorkerState(coord_sub: process.Subject(Message))
+    WorkerState(coord_sub: process.Subject(Message), sub: process.Subject(Message))
 }
 
 
@@ -24,7 +24,7 @@ pub type Message {
 
     Calculate(k: Int, range: Int, start_value: Int)
 
-    Check(int_list: List(Int))
+    Check(destroy: process.Subject(Message), int_list: List(Int))
 }
 
 
@@ -32,14 +32,14 @@ pub fn start(
     coord_sub: process.Subject(Message)
     ) -> Result(actor.Started(process.Subject(Message)), actor.StartError) {
 
-    io.println("[WORKER]: start function started")
+    //io.println("[WORKER]: start function started")
 
     let ret = actor.new_with_initialiser(10, fn(sub) {init(sub, coord_sub)})
     |> actor.on_message(handle_worker_messages)
     |> actor.start 
 
 
-    io.println("[WORKER]: start function finished")
+    //io.println("[WORKER]: start function finished")
     ret
     
 }
@@ -54,9 +54,10 @@ fn init(
             process.Subject(Message)), 
         String) {
 
-    io.println("[WORKER]: init function started")
+    //io.println("[WORKER]: init function started")
 
     let init_state = WorkerState(
+                        sub: sub,
                         coord_sub: coord_sub
                     )
 
@@ -65,7 +66,7 @@ fn init(
 
     process.send(sub, TryRegister(sub))
 
-    io.println("[WORKER]: init function finished")
+    //io.println("[WORKER]: init function finished")
     Ok(init)
 
 }
@@ -75,20 +76,20 @@ fn handle_worker_messages (
     message: Message,
     ) -> actor.Next(WorkerState, Message) {
 
-    io.println("[WORKER]: got message")
+    //io.println("[WORKER]: got message")
     
     case message {
 
         Shutdown -> actor.stop()
 
         TestMessage -> {
-            io.println("[WORKER]; ____GOT_TEST____")
+            //io.println("[WORKER]; ____GOT_TEST____")
             actor.continue(state)
         }
 
         TryRegister(sub) -> {
 
-            io.println("[WORKER]: recvd TryRegister message")
+            //io.println("[WORKER]: recvd TryRegister message")
 
             //actor.send(state.coord_sub, TestMessage)
             actor.send(state.coord_sub, RegisterWorker(sub))
@@ -97,15 +98,15 @@ fn handle_worker_messages (
 
         Calculate(k, count, start_num) -> {
 
-            io.println("[WORKER]: recvd Calculate message:\nk: " <> int.to_string(k) 
-                <> " count: " <> int.to_string(count) <> " start_num: " <> int.to_string(start_num))
+            //io.println("[WORKER]: recvd Calculate message:\nk: " <> int.to_string(k) 
+            //    <> " count: " <> int.to_string(count) <> " start_num: " <> int.to_string(start_num))
 
-            actor.send(state.coord_sub, Check(calc_sum_squares(k, count, start_num)))
+            actor.send(state.coord_sub, Check(state.sub, calc_sum_squares(k, count, start_num)))
             actor.continue(state)
         }
 
         _ -> {
-            io.println("[WORKER]: worker recvd invalid message")
+            //io.println("[WORKER]: worker recvd invalid message")
             actor.continue(state)
         }
     }
@@ -114,20 +115,20 @@ fn handle_worker_messages (
 
 fn calc_sum_squares(k: Int, count: Int, start_idx: Int) -> List(Int) {
 
-    io.println("[WORKER]: checking start_idx: " <> int.to_string(start_idx) <> " count: " <> int.to_string(count) <> " k: " <> int.to_string(k))
+    //io.println("[WORKER]: checking start_idx: " <> int.to_string(start_idx) <> " count: " <> int.to_string(count) <> " k: " <> int.to_string(k))
 
     list.range(start_idx, {count - 1} + start_idx)
     |> list.filter(fn(x) {
-                    io.println("[WORKER]: using value from array: " <> int.to_string(x))
+                    //io.println("[WORKER]: using value from array: " <> int.to_string(x))
                     let calc_val = list.range(x, {k - 1} + x)
                     |> list.fold(0, fn(acc, a) {
                                         {acc + a * a}
                                     }
                                )
-                    io.println("[WORKER]: sum squared value " <> int.to_string(calc_val))
+                    //io.println("[WORKER]: sum squared value " <> int.to_string(calc_val))
 
                     let assert Ok(float_val) = int.square_root(calc_val) 
-                    //io.println("[WORKER]: checking float" <> float.to_string(float_val))
+                    ////io.println("[WORKER]: checking float" <> float.to_string(float_val))
                     float_val == float.ceiling(float_val)
                 }
         )

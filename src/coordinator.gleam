@@ -5,6 +5,9 @@ import gleam/list
 import gleam/otp/actor
 import gleam/erlang/process
 
+import gleam/time/timestamp
+import gleam/time/duration
+
 import worker.{type Message}
 
 
@@ -17,7 +20,9 @@ type CoordState {
         num_workers: Int,
         curr_idx: Int,
         start_num: Int,
+        finished_count: Int,
         subject: process.Subject(Message),
+        start_time: timestamp.Timestamp,
         workers: List(process.Subject(worker.Message))
     )
 }
@@ -32,7 +37,7 @@ pub fn start(
         actor.StartError) {
 
 
-    io.println("[COORDINATOR]: starting coordinator")
+    //io.println("[COORDINATOR]: starting coordinator")
 
     let act = actor.new_with_initialiser(10, fn(sub) {init(sub, count, last_count, k, num_workers)})
     |> actor.on_message(handle_coord_message)
@@ -57,9 +62,11 @@ fn init(
         ) {
 
 
-    io.println("[COORDINATOR]: init function started")
+    //io.println("[COORDINATOR]: init function started")
 
-    io.println("[COORDINATOR]: initalising with:\n" <> "count: " <> int.to_string(count) <> " last_count: " <> int.to_string(last_count) <> " k: " <>int.to_string(k) <> " num_workers: " <> int.to_string(num_workers))
+    //io.println("[COORDINATOR]: initalising with:\n" <> "count: " <> int.to_string(count) <> " last_count: " <> int.to_string(last_count) <> " k: " <>int.to_string(k) <> " num_workers: " <> int.to_string(num_workers))
+
+    let start_time = timestamp.system_time()
 
     let init_state = CoordState(
                         count: count,
@@ -68,13 +75,15 @@ fn init(
                         num_workers: num_workers,
                         curr_idx: 1,
                         start_num: 1,
+                        finished_count: 0,
                         subject: sub,
+                        start_time: start_time,
                         workers: []
                     )
 
     let init = actor.initialised(init_state)
     |> actor.returning(sub)
-    io.println("[COORDINATOR]: init function finished")
+    //io.println("[COORDINATOR]: init function finished")
 
     Ok(init)
 }
@@ -86,29 +95,53 @@ fn handle_coord_message(
 
     case message {
 
-        worker.Shutdown -> actor.stop()
+        worker.Shutdown -> {
+
+            let end = timestamp.system_time()
+            let #(time_s, time_ns) = timestamp.difference(state.start_time, end)
+            |> duration.to_seconds_and_nanoseconds
+            io.println("Time Taken: " <> int.to_string(time_s) <> "." <> int.to_string(time_ns))
+            actor.stop()
+        }
 
         worker.TestMessage -> {
-            io.println("[COORDINATOR]: ____GOT_TEST____")
+            //io.println("[COORDINATOR]: ____GOT_TEST____")
             actor.continue(state)
         }
 
-        worker.Check(num_list) -> {
+        worker.Check(worker_sub, num_list) -> {
 
-            io.println("[COORDINATOR]: rcvd check message from worker")
+            //io.println("[COORDINATOR]: rcvd check message from worker")
             list.each(num_list, fn(a) {
 
                                     io.println(int.to_string(a))
                                 }
             )
 
-            actor.continue(state)
+            process.send(worker_sub, worker.Shutdown)
+
+            let new_state = CoordState(
+                ..state,
+                finished_count: state.finished_count + 1
+            )
+
+            case new_state.finished_count == new_state.num_workers {
+
+                True -> {
+                    process.send(new_state.subject, worker.Shutdown)
+                }
+
+                False -> Nil 
+
+            }
+
+            actor.continue(new_state)
 
         }
 
         worker.RegisterWorker(worker_subject) -> {
 
-            io.println("[COORDINATOR]: added worker to state")
+            //io.println("[COORDINATOR]: added worker to state")
             
             actor.send(worker_subject, worker.Calculate(state.k, state.count, state.start_num))
 
@@ -141,7 +174,7 @@ fn handle_coord_message(
 
         _ -> {
 
-            io.println("[COORDINATOR]: recvd invalid message")
+            //io.println("[COORDINATOR]: recvd invalid message")
             actor.continue(state)
         }
 

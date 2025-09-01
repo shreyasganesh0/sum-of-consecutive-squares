@@ -1,7 +1,7 @@
 import argv
 import gleam/io
 import gleam/int
-import gleam/string
+//import gleam/string
 import gleam/list
 import gleam/result
 
@@ -50,21 +50,16 @@ pub fn main() -> Result(Int, ParseError) {
 
 pub fn calc_sum_of_squares(n: Int, k: Int) -> Result(Int, ParseError) {
 
-    int.to_string(n)
-    |>string.append("Numbers paresd are: ", _)
-    |>string.append(int.to_string(k))
-    |>io.println
-
     //let num_cores = system.schedulers_online()
 
-    let num_workers = 2 // hardcoded for now
+    let num_workers = 8 // hardcoded for now
 
     let count = n / num_workers
     let last_count = count + {n % num_workers} 
 
     let worker_list = list.range(1, num_workers)
 
-    io.println("Number of availble workers: " <> int.to_string(num_workers))
+    //io.println("Number of availble workers: " <> int.to_string(num_workers))
 
     // let _ = supervisor.new(strategy: supervisor.OneForOne)
     // |> supervisor.add(supervision.worker(fn() {coordinator.start(count,
@@ -101,7 +96,6 @@ pub fn calc_sum_of_squares(n: Int, k: Int) -> Result(Int, ParseError) {
 
         Error(_) -> io.println("Failed to start coordinator")
     }
-
 
 
     process.sleep_forever()
