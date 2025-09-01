@@ -5,8 +5,7 @@ import gleam/string
 import gleam/list
 import gleam/result
 
-import gleam/otp/static_supervisor as supervisor
-import gleam/otp/supervision
+import gleam/erlang/process
 
 import worker
 import coordinator
@@ -58,7 +57,7 @@ pub fn calc_sum_of_squares(n: Int, k: Int) -> Result(Int, ParseError) {
 
     //let num_cores = system.schedulers_online()
 
-    let num_workers = 8 // hardcoded for now
+    let num_workers = 2 // hardcoded for now
 
     let count = n / num_workers
     let last_count = count + {n % num_workers} 
@@ -67,23 +66,45 @@ pub fn calc_sum_of_squares(n: Int, k: Int) -> Result(Int, ParseError) {
 
     io.println("Number of availble workers: " <> int.to_string(num_workers))
 
-    let _ = supervisor.new(strategy: supervisor.OneForOne)
-    |> supervisor.add(supervision.worker(fn() {coordinator.start(count,
-                                                                last_count,
-                                                                k,
-                                                                num_workers
-                                                                )
-                                        } 
-                                    )
+    // let _ = supervisor.new(strategy: supervisor.OneForOne)
+    // |> supervisor.add(supervision.worker(fn() {coordinator.start(count,
+    //                                                             last_count,
+    //                                                             k,
+    //                                                             num_workers
+    //                                                             )
+    //                                     } 
+    //                                 )
+    // )
+    // |> list.fold(worker_list, _, fn(builder, _) -> supervisor.Builder {
+    //                                 supervisor.add(
+    //                                     builder,
+    //                                     supervision.worker(worker.start)
+    //                                 )
+    //                             }
+    //     )
+    // |> supervisor.start
+
+    let coord = coordinator.start(count,
+        last_count,
+        k,
+        num_workers
     )
-    |> list.fold(worker_list, _, fn(builder, _) -> supervisor.Builder {
-                                    supervisor.add(
-                                        builder,
-                                        supervision.worker(worker.start)
-                                    )
-                                }
-        )
-    |> supervisor.start
+
+    case coord {
+
+        Ok(act) -> {
+
+            let coord_subject = act.data
+            list.each(worker_list, fn(_a) {worker.start(coord_subject)})
+            Nil
+        }
+
+        Error(_) -> io.println("Failed to start coordinator")
+    }
+
+
+
+    process.sleep_forever()
 
 
     Ok(0)

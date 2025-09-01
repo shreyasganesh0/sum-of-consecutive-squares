@@ -6,9 +6,17 @@ import gleam/float
 import gleam/otp/actor
 import gleam/erlang/process
 
+pub type WorkerState {
+
+    WorkerState(coord_sub: process.Subject(Message))
+}
+
+
 pub type Message {
 
     Shutdown
+
+    TestMessage
 
     TryRegister(self_subject: process.Subject(Message))
 
@@ -20,69 +28,83 @@ pub type Message {
 }
 
 
-pub fn start() -> Result(actor.Started(process.Subject(Message)), actor.StartError) {
+pub fn start(
+    coord_sub: process.Subject(Message)
+    ) -> Result(actor.Started(process.Subject(Message)), actor.StartError) {
 
     io.println("[WORKER]: start function started")
 
-    let act = actor.new_with_initialiser(10, init)
+    let ret = actor.new_with_initialiser(10, fn(sub) {init(sub, coord_sub)})
     |> actor.on_message(handle_worker_messages)
-    |> actor.start
+    |> actor.start 
 
-    act
+
+    io.println("[WORKER]: start function finished")
+    ret
+    
 }
 
 fn init(
-    sub: process.Subject(Message)
+    sub: process.Subject(Message),
+    coord_sub: process.Subject(Message)
     ) -> Result(
         actor.Initialised(
-            Nil, 
+            WorkerState,
             Message, 
             process.Subject(Message)), 
         String) {
 
     io.println("[WORKER]: init function started")
 
-    process.send(sub, TryRegister(sub))
+    let init_state = WorkerState(
+                        coord_sub: coord_sub
+                    )
 
-    let init = actor.initialised(Nil)
+    let init = actor.initialised(init_state)
     |> actor.returning(sub)
 
+    io.println("[WORKER]: init function finished")
     Ok(init)
 
 }
 
 fn handle_worker_messages (
-    _state: Nil,
+    state: WorkerState,
     message: Message,
-    ) -> actor.Next(Nil, Message) {
+    ) -> actor.Next(WorkerState, Message) {
 
     io.println("[WORKER]: got message")
-    let coord_name = process.new_name("Coordinator")
-    |>process.named_subject
-    
     
     case message {
 
         Shutdown -> actor.stop()
 
+        TestMessage -> {
+            io.println("[WORKER]; ____GOT_TEST____")
+            actor.continue(state)
+        }
+
         TryRegister(sub) -> {
 
             io.println("[WORKER]: recvd TryRegister message")
-            process.send(coord_name, RegisterWorker(sub))
-            actor.continue(Nil)
+
+            actor.send(state.coord_sub, TestMessage)
+            actor.send(state.coord_sub, RegisterWorker(sub))
+            actor.continue(state)
         }
 
         Calculate(k, count, start_num) -> {
 
-            io.println("[WORKER]: recvd Calculate message:\nk" <> int.to_string(k) <> "count: " <> int.to_string(count) <> "start_num: " <> int.to_string(start_num))
+            io.println("[WORKER]: recvd Calculate message:\nk" <> int.to_string(k) 
+                <> "count: " <> int.to_string(count) <> "start_num: " <> int.to_string(start_num))
 
-            process.send(coord_name, Check(calc_sum_squares(k, count, start_num)))
-            actor.continue(Nil)
+            actor.send(state.coord_sub, Check(calc_sum_squares(k, count, start_num)))
+            actor.continue(state)
         }
 
         _ -> {
             io.println("[WORKER]: worker recvd invalid message")
-            actor.continue(Nil)
+            actor.continue(state)
         }
     }
 

@@ -7,6 +7,7 @@ import gleam/erlang/process
 
 import worker.{type Message}
 
+
 type CoordState {
 
     CoordState(
@@ -16,6 +17,7 @@ type CoordState {
         num_workers: Int,
         curr_idx: Int,
         start_num: Int,
+        subject: process.Subject(Message),
         workers: List(process.Subject(worker.Message))
     )
 }
@@ -29,17 +31,15 @@ pub fn start(
         actor.Started(process.Subject(Message)),
         actor.StartError) {
 
-    let coord_name = process.new_name("Coordinator")
 
     io.println("[COORDINATOR]: starting coordinator")
 
     let act = actor.new_with_initialiser(10, fn(sub) {init(sub, count, last_count, k, num_workers)})
-    |> actor.named(coord_name)
     |> actor.on_message(handle_coord_message)
     |> actor.start
+    
 
     act
-
 }
 
 fn init(
@@ -56,7 +56,10 @@ fn init(
         String,
         ) {
 
-    io.println("[COORDINATOR]: initalising with:\n" <> "count: " <> int.to_string(count) <> "last_count: " <> int.to_string(last_count) <> "k: " <>int.to_string(k) <> "num_workers: " <> int.to_string(num_workers))
+
+    io.println("[COORDINATOR]: init function started")
+
+    io.println("[COORDINATOR]: initalising with:\n" <> "count: " <> int.to_string(count) <> " last_count: " <> int.to_string(last_count) <> " k: " <>int.to_string(k) <> " num_workers: " <> int.to_string(num_workers))
 
     let init_state = CoordState(
                         count: count,
@@ -65,12 +68,13 @@ fn init(
                         num_workers: num_workers,
                         curr_idx: 1,
                         start_num: 1,
+                        subject: sub,
                         workers: []
                     )
 
     let init = actor.initialised(init_state)
     |> actor.returning(sub)
-    io.println("[COORDINATOR]: registering coord finished init")
+    io.println("[COORDINATOR]: init function finished")
 
     Ok(init)
 }
@@ -83,6 +87,11 @@ fn handle_coord_message(
     case message {
 
         worker.Shutdown -> actor.stop()
+
+        worker.TestMessage -> {
+            io.println("[COORDINATOR]: ____GOT_TEST____")
+            actor.continue(state)
+        }
 
         worker.Check(num_list) -> {
 
@@ -101,7 +110,7 @@ fn handle_coord_message(
 
             io.println("[COORDINATOR]: added worker to state")
             
-            process.send(worker_subject, worker.Calculate(state.k, state.count, state.start_num))
+            actor.send(worker_subject, worker.Calculate(state.k, state.count, state.start_num))
 
             case state.curr_idx < {state.num_workers - 1} {
 
@@ -132,7 +141,7 @@ fn handle_coord_message(
 
         _ -> {
 
-            io.println("coordinator recvd invalid message")
+            io.println("[COORDINATOR]: recvd invalid message")
             actor.continue(state)
         }
 
