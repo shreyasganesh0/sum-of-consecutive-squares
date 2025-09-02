@@ -3,6 +3,8 @@ import gleam/int
 import gleam/list
 
 import gleam/otp/actor
+
+import gleam/erlang/atom
 import gleam/erlang/process
 
 import gleam/time/timestamp
@@ -10,6 +12,14 @@ import gleam/time/duration
 
 import worker.{type Message}
 
+@external(erlang, "erlang", "statistics")
+fn get_stats(option: atom.Atom) -> #(Int, Int)
+
+fn get_total_runtime_ms() -> Int {
+  let runtime_atom = atom.create("runtime")
+  let #(_, total_runtime) = get_stats(runtime_atom)
+  total_runtime
+}
 
 type CoordState {
 
@@ -22,7 +32,9 @@ type CoordState {
         start_num: Int,
         finished_count: Int,
         subject: process.Subject(Message),
+        main_subject: process.Subject(Nil),
         start_time: timestamp.Timestamp,
+        start_time_cpu: Int,
         workers: List(process.Subject(worker.Message))
     )
 }
@@ -32,6 +44,7 @@ pub fn start(
     last_count: Int,
     k: Int, 
     num_workers: Int, 
+    main_sub: process.Subject(Nil),
     ) -> Result(
         actor.Started(process.Subject(Message)),
         actor.StartError) {
@@ -39,10 +52,9 @@ pub fn start(
 
     //io.println("[COORDINATOR]: starting coordinator")
 
-    let act = actor.new_with_initialiser(10, fn(sub) {init(sub, count, last_count, k, num_workers)})
+    let act = actor.new_with_initialiser(1000, fn(sub) {init(sub, count, last_count, k, num_workers, main_sub)})
     |> actor.on_message(handle_coord_message)
     |> actor.start
-    
 
     act
 }
@@ -53,6 +65,7 @@ fn init(
     last_count: Int,
     k: Int,
     num_workers: Int,
+    main_subject: process.Subject(Nil)
     ) -> Result(
         actor.Initialised(
             CoordState, 
@@ -66,6 +79,7 @@ fn init(
 
     //io.println("[COORDINATOR]: initalising with:\n" <> "count: " <> int.to_string(count) <> " last_count: " <> int.to_string(last_count) <> " k: " <>int.to_string(k) <> " num_workers: " <> int.to_string(num_workers))
 
+    let start_cpu_ms = get_total_runtime_ms()
     let start_time = timestamp.system_time()
 
     let init_state = CoordState(
@@ -77,7 +91,9 @@ fn init(
                         start_num: 1,
                         finished_count: 0,
                         subject: sub,
+                        main_subject: main_subject,
                         start_time: start_time,
+                        start_time_cpu: start_cpu_ms,
                         workers: []
                     )
 
@@ -97,10 +113,22 @@ fn handle_coord_message(
 
         worker.Shutdown -> {
 
+             let end_cpu_ms = get_total_runtime_ms()
+
+            let elapsed_cpu_ms = end_cpu_ms - state.start_time_cpu
+
+            io.println("Finished.")
+            io.println(
+            "The work took " <> int.to_string(elapsed_cpu_ms) <> "ms of CPU time.",
+            )
+
             let end = timestamp.system_time()
             let #(time_s, time_ns) = timestamp.difference(state.start_time, end)
             |> duration.to_seconds_and_nanoseconds
             io.println("Time Taken: " <> int.to_string(time_s) <> "." <> int.to_string(time_ns))
+
+            actor.send(state.main_subject, Nil)
+            
             actor.stop()
         }
 

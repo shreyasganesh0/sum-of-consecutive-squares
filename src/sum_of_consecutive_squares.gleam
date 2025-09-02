@@ -79,10 +79,13 @@ pub fn calc_sum_of_squares(n: Int, k: Int) -> Result(Int, ParseError) {
     //     )
     // |> supervisor.start
 
+    let main_sub = process.new_subject()
+
     let coord = coordinator.start(count,
         last_count,
         k,
-        num_workers
+        num_workers,
+        main_sub,
     )
 
     case coord {
@@ -91,14 +94,19 @@ pub fn calc_sum_of_squares(n: Int, k: Int) -> Result(Int, ParseError) {
 
             let coord_subject = act.data
             list.each(worker_list, fn(_a) {worker.start(coord_subject)})
+            process.receive_forever(main_sub)
             Nil
         }
 
-        Error(_) -> io.println("Failed to start coordinator")
+        Error(error) ->{
+            echo error
+            io.println("Failed to start coordinator")
+        }
     }
 
 
-    process.sleep_forever()
+
+    //process.sleep_forever()
 
 
     Ok(0)

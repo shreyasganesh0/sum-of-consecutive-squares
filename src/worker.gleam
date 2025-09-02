@@ -14,6 +14,8 @@ pub type WorkerState {
 
 pub type Message {
 
+    FinishedWork
+
     Shutdown
 
     TestMessage
