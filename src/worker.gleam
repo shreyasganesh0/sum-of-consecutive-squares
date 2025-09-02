@@ -24,7 +24,7 @@ pub type Message {
 
     RegisterWorker(worker_subject: process.Subject(Message))
 
-    Calculate(k: Int, range: Int, start_value: Int)
+    Calculate(k: Int, count: Int, start_num: Int)
 
     Check(destroy: process.Subject(Message), int_list: List(Int))
 }
@@ -66,7 +66,7 @@ fn init(
     let init = actor.initialised(init_state)
     |> actor.returning(sub)
 
-    process.send(sub, TryRegister(sub))
+    //process.send(sub, TryRegister(sub))
 
     //io.println("[WORKER]: init function finished")
     Ok(init)
@@ -84,24 +84,23 @@ fn handle_worker_messages (
 
         Shutdown -> actor.stop()
 
-        TestMessage -> {
-            //io.println("[WORKER]; ____GOT_TEST____")
-            actor.continue(state)
-        }
-
-        TryRegister(sub) -> {
-
-            //io.println("[WORKER]: recvd TryRegister message")
-
-            //actor.send(state.coord_sub, TestMessage)
-            actor.send(state.coord_sub, RegisterWorker(sub))
-            actor.continue(state)
-        }
+        // TestMessage -> {
+        //     //io.println("[WORKER]; ____GOT_TEST____")
+        //     actor.continue(state)
+        // }
+        //
+        // TryRegister(sub) -> {
+        //
+        //     //io.println("[WORKER]: recvd TryRegister message")
+        //
+        //     //actor.send(state.coord_sub, TestMessage)
+        //     actor.send(state.coord_sub, RegisterWorker(sub))
+        //     actor.continue(state)
+        // }
 
         Calculate(k, count, start_num) -> {
 
-            //io.println("[WORKER]: recvd Calculate message:\nk: " <> int.to_string(k) 
-            //    <> " count: " <> int.to_string(count) <> " start_num: " <> int.to_string(start_num))
+            //io.println("[WORKER]: recvd Calculate message:\nk: " <> int.to_string(k) <> " count: " <> int.to_string(count) <> " start_num: " <> int.to_string(start_num))
 
             actor.send(state.coord_sub, Check(state.sub, calc_sum_squares(k, count, start_num)))
             actor.continue(state)

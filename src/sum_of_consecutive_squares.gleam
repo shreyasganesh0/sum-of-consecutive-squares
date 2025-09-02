@@ -47,7 +47,38 @@ pub fn main() -> Result(Int, ParseError) {
             calc_sum_of_squares(num1, num2, num3)
         }
 
-        _ -> Error(InvalidArgs)
+        Error(InvalidArgs) -> {
+            io.println("Input provided to args were not integers") 
+            Error(InvalidArgs)
+        }
+
+        Error(NotEnoughArgs(required)) -> {
+            io.println("Expected 3 args")
+            io.println("Usage: gleam run <N> <k> <max_workers>")
+            Error(NotEnoughArgs(required: required))
+        }
+
+        Error(ActorError(actor_error)) -> {
+
+            case actor_error {
+
+                actor.InitTimeout -> {
+                    io.println("Actor failed to start in exepected time")
+                }
+
+                actor.InitFailed(str) -> {
+                    io.println("Couldnt initialize actor: " <> str)
+                }
+
+                actor.InitExited(_exit_reason) -> {
+
+                    io.println("Actor exited")
+                }
+
+            }
+                Error(ActorError(actor_error))
+        }
+                                        
     }
 
 }
@@ -67,7 +98,7 @@ pub fn calc_sum_of_squares(n: Int, k: Int, max_workers: Int) -> Result(Int, Pars
     let count = n / num_workers
     let last_count = count + {n % num_workers} 
 
-    let worker_list = list.range(1, num_workers)
+    let worker_list = list.range(1, num_workers - 1)
 
     //io.println("Number of availble workers: " <> int.to_string(num_workers))
 
@@ -103,7 +134,27 @@ pub fn calc_sum_of_squares(n: Int, k: Int, max_workers: Int) -> Result(Int, Pars
         Ok(act) -> {
 
             let coord_subject = act.data
-            list.each(worker_list, fn(_a) {worker.start(coord_subject)})
+            list.each(worker_list, fn(a) {
+
+                                    let assert Ok(curr_worker) = worker.start(coord_subject)
+                                    process.send(curr_worker.data, 
+                                                 worker.Calculate(
+                                                                k: k, 
+                                                                count: count,
+                                                                start_num: {1 + {a - 1} * count},
+                                                  )
+                                    )
+                                }
+            )
+
+            let assert Ok(curr_worker) = worker.start(coord_subject)
+            process.send(curr_worker.data, 
+                         worker.Calculate(
+                                        k: k, 
+                                        count: last_count,
+                                        start_num: 1 + {num_workers - 1} * count,
+                          )
+            )
             process.receive_forever(main_sub)
             Ok(0)
         }
@@ -113,6 +164,8 @@ pub fn calc_sum_of_squares(n: Int, k: Int, max_workers: Int) -> Result(Int, Pars
             Error(ActorError(error))
         }
     }
+
+
 
 
 }

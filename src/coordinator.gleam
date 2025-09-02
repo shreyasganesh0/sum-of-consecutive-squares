@@ -167,38 +167,41 @@ fn handle_coord_message(
 
         }
 
-        worker.RegisterWorker(worker_subject) -> {
-
-            //io.println("[COORDINATOR]: added worker to state")
-            
-            actor.send(worker_subject, worker.Calculate(state.k, state.count, state.start_num))
-
-            case state.curr_idx < {state.num_workers - 1} {
-
-                True -> { 
-                    let new_state = CoordState(
-                        ..state,
-                        curr_idx: state.curr_idx + 1,
-                        start_num: state.start_num + state.count,
-                        workers: [worker_subject, ..state.workers]
-                    )
-                    actor.continue(new_state)
-                }
-
-                False -> { // last worker
-                    let new_state = CoordState(
-                        ..state,
-                        count: state.last_count,
-                        curr_idx: state.curr_idx + 1,
-                        start_num: state.start_num + state.count,
-                        workers: [worker_subject, ..state.workers]
-                    )
-                    actor.continue(new_state)
-                }
-            }
-
-
-        }
+        // worker.RegisterWorker(worker_subject) -> {
+        //
+        //     io.println("[COORDINATOR]: added worker to state")
+        //
+        //     actor.send(worker_subject, worker.Calculate(state.k, state.count, state.start_num))
+        //
+        //     case state.curr_idx < {state.num_workers - 1} {
+        //
+        //         True -> { 
+        //             let new_state = CoordState(
+        //                 ..state,
+        //                 curr_idx: state.curr_idx + 1,
+        //                 start_num: state.start_num + state.count,
+        //                 workers: [worker_subject, ..state.workers]
+        //             )
+        //             actor.continue(new_state)
+        //         }
+        //
+        //         False -> { // last worker
+        //             let new_state = CoordState(
+        //                 ..state,
+        //                 count: state.last_count,
+        //                 curr_idx: state.curr_idx + 1,
+        //                 start_num: state.start_num + state.count,
+        //                 workers: [worker_subject, ..state.workers]
+        //             )
+        //             actor.continue(new_state)
+        //         }
+        //     }
+        //
+        //     io.println("[COORDINATOR]: received worker registrartion")
+        //
+        //     actor.continue(state)
+        //
+        // }
 
         _ -> {
 
