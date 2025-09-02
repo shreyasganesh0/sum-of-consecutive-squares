@@ -5,6 +5,8 @@ import gleam/int
 import gleam/list
 import gleam/result
 
+import gleam/otp/actor
+
 import gleam/erlang/process
 
 import worker
@@ -14,32 +16,35 @@ import coordinator
 pub type ParseError {
     NotEnoughArgs(required: Int)
     InvalidArgs
+    ActorError(error: actor.StartError)
 }
 
 pub fn main() -> Result(Int, ParseError) {
 
     let res = case argv.load().arguments {
 
-        [str1, str2] -> {
+        [str1, str2, str3] -> {
 
             {
                 use int1 <- result.try(int.parse(str1)
                 |>result.map_error(fn(_) { InvalidArgs }))
                 use int2 <- result.try(int.parse(str2)
                 |>result.map_error(fn(_) { InvalidArgs }))
-                Ok(#(int1, int2))
+                use int3 <- result.try(int.parse(str3)
+                |>result.map_error(fn(_) { InvalidArgs }))
+                Ok(#(int1, int2, int3))
             }
 
         }
 
-        _ -> Error(NotEnoughArgs(required: 2))
+        _ -> Error(NotEnoughArgs(required: 3))
     }
 
     case res {
 
-        Ok(#(num1, num2)) -> {
+        Ok(#(num1, num2, num3)) -> {
 
-            calc_sum_of_squares(num1, num2)
+            calc_sum_of_squares(num1, num2, num3)
         }
 
         _ -> Error(InvalidArgs)
@@ -48,11 +53,16 @@ pub fn main() -> Result(Int, ParseError) {
 }
 
 
-pub fn calc_sum_of_squares(n: Int, k: Int) -> Result(Int, ParseError) {
+pub fn calc_sum_of_squares(n: Int, k: Int, max_workers: Int) -> Result(Int, ParseError) {
 
     //let num_cores = system.schedulers_online()
 
-    let num_workers = 8 // hardcoded for now
+    let num_workers = case n <= max_workers {
+
+        True -> n
+
+        False -> max_workers
+    }
 
     let count = n / num_workers
     let last_count = count + {n % num_workers} 
@@ -95,19 +105,14 @@ pub fn calc_sum_of_squares(n: Int, k: Int) -> Result(Int, ParseError) {
             let coord_subject = act.data
             list.each(worker_list, fn(_a) {worker.start(coord_subject)})
             process.receive_forever(main_sub)
-            Nil
+            Ok(0)
         }
 
-        Error(error) ->{
-            echo error
+        Error(error) -> {
             io.println("Failed to start coordinator")
+            Error(ActorError(error))
         }
     }
 
 
-
-    //process.sleep_forever()
-
-
-    Ok(0)
 }
