@@ -4,13 +4,13 @@ import gleam/list
 import gleam/float
 
 import gleam/otp/actor
+
 import gleam/erlang/process
 
 pub type WorkerState {
 
     WorkerState(coord_sub: process.Subject(Message), sub: process.Subject(Message))
 }
-
 
 pub type Message {
 
@@ -29,14 +29,13 @@ pub type Message {
     Check(destroy: process.Subject(Message), int_list: List(Int))
 }
 
-
 pub fn start(
     coord_sub: process.Subject(Message)
     ) -> Result(actor.Started(process.Subject(Message)), actor.StartError) {
 
     //io.println("[WORKER]: start function started")
 
-    let ret = actor.new_with_initialiser(10, fn(sub) {init(sub, coord_sub)})
+    let ret = actor.new_with_initialiser(10000, fn(sub) {init(sub, coord_sub)})
     |> actor.on_message(handle_worker_messages)
     |> actor.start 
 
@@ -102,7 +101,8 @@ fn handle_worker_messages (
 
             //io.println("[WORKER]: recvd Calculate message:\nk: " <> int.to_string(k) <> " count: " <> int.to_string(count) <> " start_num: " <> int.to_string(start_num))
 
-            actor.send(state.coord_sub, Check(state.sub, calc_sum_squares(k, count, start_num)))
+            let ret_list = calc_sum_squares(k, count, start_num)
+            actor.send(state.coord_sub, Check(state.sub, int_list: ret_list))
             actor.continue(state)
         }
 
@@ -118,7 +118,7 @@ fn calc_sum_squares(k: Int, count: Int, start_idx: Int) -> List(Int) {
 
     //io.println("[WORKER]: checking start_idx: " <> int.to_string(start_idx) <> " count: " <> int.to_string(count) <> " k: " <> int.to_string(k))
 
-    list.range(start_idx, {count - 1} + start_idx)
+    let ret_list = list.range(start_idx, {count - 1} + start_idx)
     |> list.filter(fn(x) {
                     //io.println("[WORKER]: using value from array: " <> int.to_string(x))
                     let calc_val = list.range(x, {k - 1} + x)
@@ -133,5 +133,8 @@ fn calc_sum_squares(k: Int, count: Int, start_idx: Int) -> List(Int) {
                     float_val == float.ceiling(float_val)
                 }
         )
+
+
+    ret_list
 
 }

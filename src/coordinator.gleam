@@ -1,25 +1,17 @@
 import gleam/io
 import gleam/int
 import gleam/list
+import gleam/float
 
 import gleam/otp/actor
 
-import gleam/erlang/atom
 import gleam/erlang/process
+import gleam/erlang/atom
 
 import gleam/time/timestamp
 import gleam/time/duration
 
 import worker.{type Message}
-
-@external(erlang, "erlang", "statistics")
-fn get_stats(option: atom.Atom) -> #(Int, Int)
-
-fn get_total_runtime_ms() -> Int {
-  let runtime_atom = atom.create("runtime")
-  let #(_, total_runtime) = get_stats(runtime_atom)
-  total_runtime
-}
 
 type CoordState {
 
@@ -31,12 +23,21 @@ type CoordState {
         curr_idx: Int,
         start_num: Int,
         finished_count: Int,
+        start_cpu_time: Int,
         subject: process.Subject(Message),
         main_subject: process.Subject(Nil),
         start_time: timestamp.Timestamp,
-        start_time_cpu: Int,
         workers: List(process.Subject(worker.Message))
     )
+}
+
+@external(erlang, "erlang", "statistics")
+fn statistics(item: atom.Atom) -> #(Int, Int)
+
+fn get_cpu_time_ms() -> Int {
+  let runtime_atom = atom.create("runtime")
+  let #(_, total_runtime_ms) = statistics(runtime_atom)
+  total_runtime_ms
 }
 
 pub fn start(
@@ -52,7 +53,7 @@ pub fn start(
 
     //io.println("[COORDINATOR]: starting coordinator")
 
-    let act = actor.new_with_initialiser(1000, fn(sub) {init(sub, count, last_count, k, num_workers, main_sub)})
+    let act = actor.new_with_initialiser(1000000, fn(sub) {init(sub, count, last_count, k, num_workers, main_sub)})
     |> actor.on_message(handle_coord_message)
     |> actor.start
 
@@ -79,8 +80,8 @@ fn init(
 
     //io.println("[COORDINATOR]: initalising with:\n" <> "count: " <> int.to_string(count) <> " last_count: " <> int.to_string(last_count) <> " k: " <>int.to_string(k) <> " num_workers: " <> int.to_string(num_workers))
 
-    let start_cpu_ms = get_total_runtime_ms()
     let start_time = timestamp.system_time()
+    let start_cpu = get_cpu_time_ms()
 
     let init_state = CoordState(
                         count: count,
@@ -93,7 +94,7 @@ fn init(
                         subject: sub,
                         main_subject: main_subject,
                         start_time: start_time,
-                        start_time_cpu: start_cpu_ms,
+                        start_cpu_time: start_cpu,
                         workers: []
                     )
 
@@ -113,28 +114,29 @@ fn handle_coord_message(
 
         worker.Shutdown -> {
 
-             let end_cpu_ms = get_total_runtime_ms()
+            let end_cpu = get_cpu_time_ms()
+            let total_cpu_ms = int.to_float(end_cpu - state.start_cpu_time)
+            let cpu_time_s = total_cpu_ms /. 1000.0
 
-            let elapsed_cpu_ms = end_cpu_ms - state.start_time_cpu
+            let end_real = timestamp.system_time()
+            let total_real_duration = timestamp.difference(state.start_time, end_real)
 
-            io.println("Finished.")
-            io.println(
-            "The work took " <> int.to_string(elapsed_cpu_ms) <> "ms of CPU time.",
-            )
+            let real_time_s = duration.to_seconds(total_real_duration)
 
-            let end = timestamp.system_time()
-            let #(time_s, time_ns) = timestamp.difference(state.start_time, end)
-            |> duration.to_seconds_and_nanoseconds
-            io.println("Time Taken: " <> int.to_string(time_s) <> "." <> int.to_string(time_ns))
+            let ratio = case real_time_s >. 0.0 {
+              True -> cpu_time_s /. real_time_s
+              False -> 0.0
+            }
+
+            io.println("--- Results ---")
+            io.println("REAL TIME: " <> float.to_string(real_time_s) <> "s")
+            io.println("CPU TIME: " <> float.to_string(cpu_time_s) <> "s")
+            io.println("CPU TIME / REAL TIME Ratio: " <> float.to_string(ratio))
+
 
             actor.send(state.main_subject, Nil)
             
             actor.stop()
-        }
-
-        worker.TestMessage -> {
-            //io.println("[COORDINATOR]: ____GOT_TEST____")
-            actor.continue(state)
         }
 
         worker.Check(worker_sub, num_list) -> {

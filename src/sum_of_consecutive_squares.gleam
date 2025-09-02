@@ -12,7 +12,6 @@ import gleam/erlang/process
 import worker
 import coordinator
 
-
 pub type ParseError {
     NotEnoughArgs(required: Int)
     InvalidArgs
