@@ -1,6 +1,6 @@
 #!/bin/bash
 
-N=100000000
+N=1000000
 K=20
 OUTPUT_DIR="outputs"
 
@@ -49,7 +49,7 @@ for file in "$OUTPUT_DIR"/*.txt; do
   workers=$(echo "$file" | sed -n 's/.*run_\([0-9]*\)_workers\.txt/\1/p')
 
   current_time=$(grep "REAL TIME:" "$file" | awk '{print $3}' | sed 's/s//')
-  current_ratio=$(grep "Ratio:" "$file" | awk '{print $6}')
+  current_ratio=$(grep "Ratio:" "$file" | awk '{print $7}')
 
   if [[ -n "$current_time" && -n "$current_ratio" ]]; then
     

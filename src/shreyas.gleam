@@ -22,15 +22,31 @@ pub fn main() -> Result(Int, ParseError) {
 
     let res = case argv.load().arguments {
 
+        [str1, str2] -> {
+
+            {
+                use int1 <- result.try(int.parse(str1)
+                |>result.map_error(fn(_) { InvalidArgs }))
+
+                use int2 <- result.try(int.parse(str2)
+                |>result.map_error(fn(_) { InvalidArgs }))
+
+                Ok(#(int1, int2, 100))
+            }
+        }
+
         [str1, str2, str3] -> {
 
             {
                 use int1 <- result.try(int.parse(str1)
                 |>result.map_error(fn(_) { InvalidArgs }))
+
                 use int2 <- result.try(int.parse(str2)
                 |>result.map_error(fn(_) { InvalidArgs }))
+
                 use int3 <- result.try(int.parse(str3)
                 |>result.map_error(fn(_) { InvalidArgs }))
+
                 Ok(#(int1, int2, int3))
             }
 

@@ -1,4 +1,5 @@
-name = "sum_of_consecutive_squares"
+name = "shreyas"
+module = "sum_of_consecutive_squares"
 version = "1.12.0"
 
 # Fill out these fields if you intend to generate HTML documentation or publish
@@ -21,3 +22,4 @@ gleam_time = ">= 1.4.0 and < 2.0.0"
 
 [dev-dependencies]
 gleeunit = ">= 1.0.0 and < 2.0.0"
+gleescript = ">= 1.5.2 and < 2.0.0"
