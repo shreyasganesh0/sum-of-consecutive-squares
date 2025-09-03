@@ -10,6 +10,10 @@ gleam add sum_of_consecutive_squares@1
 ## Usage 
 
 ```sh
+./shreyas <N> <k> [max_workers]
+
+        OR
+
 gleam run <N> <k> [max_workers]   # Run the project
 ```
 - N is the end of the Domain(the maximum number in the calculation space)
@@ -26,8 +30,7 @@ gleam run <N> <k> [max_workers]   # Run the project
 
 2. Solution for ```gleam run 1000000 4``` **does not exist** 
 
-3. the ratio of CPU_TIME:REAL_TIME was found to be 0.021 for 100 workers
-    - since it completed almost instantly the the gleam VM time calcution overhead skewed the data  
+3. the ratio of CPU_TIME:REAL_TIME was 0.1666/0.02644 = 6.3106
     - for reference with 1 worker the ratio was 1.7 (due to worker cleanup overhead)
     - ratios for bigger solutions of 100000000 2 for example which has solutions gave us a ratio of 5-6
     which is closer to what is to be expected
