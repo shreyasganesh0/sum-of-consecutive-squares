@@ -9,7 +9,7 @@ import gleam/erlang/process
 
 pub type WorkerState {
 
-    WorkerState(coord_sub: process.Subject(Message), sub: process.Subject(Message))
+    WorkerState(coord_sub: process.Subject(Message))
 }
 
 pub type Message {
@@ -24,58 +24,51 @@ pub type Message {
 
     RegisterWorker(worker_subject: process.Subject(Message))
 
-    Calculate(k: Int, count: Int, start_num: Int)
+    Calculate(coord_sub: process.Subject(Message), k: Int, count: Int, start_num: Int)
 
-    Check(destroy: process.Subject(Message), int_list: List(Int))
+    Check(int_list: List(Int))
 }
 
 pub fn start(
-    coord_sub: process.Subject(Message)
     ) -> Result(actor.Started(process.Subject(Message)), actor.StartError) {
 
     //io.println("[WORKER]: start function started")
 
-    let ret = actor.new_with_initialiser(10000, fn(sub) {init(sub, coord_sub)})
+    let ret = actor.new(Nil)
     |> actor.on_message(handle_worker_messages)
     |> actor.start 
-
 
     //io.println("[WORKER]: start function finished")
     ret
     
 }
 
-fn init(
-    sub: process.Subject(Message),
-    coord_sub: process.Subject(Message)
-    ) -> Result(
-        actor.Initialised(
-            WorkerState,
-            Message, 
-            process.Subject(Message)), 
-        String) {
-
-    //io.println("[WORKER]: init function started")
-
-    let init_state = WorkerState(
-                        sub: sub,
-                        coord_sub: coord_sub
-                    )
-
-    let init = actor.initialised(init_state)
-    |> actor.returning(sub)
-
-    //process.send(sub, TryRegister(sub))
-
-    //io.println("[WORKER]: init function finished")
-    Ok(init)
-
-}
+// fn init(
+//     sub: process.Subject(Message),
+//     ) -> Result(
+//         actor.Initialised(
+//             Nil,
+//             Message, 
+//             process.Subject(Message)), 
+//         String) {
+//
+//     //io.println("[WORKER]: init function started")
+//
+//
+//     let init = actor.initialised(Nil)
+//     |> actor.returning(sub)
+//
+//     //process.send(sub, TryRegister(sub))
+//
+//     //io.println("[WORKER]: init function finished")
+//     Ok(init)
+//
+// }
 
 fn handle_worker_messages (
-    state: WorkerState,
+    state: Nil, 
     message: Message,
-    ) -> actor.Next(WorkerState, Message) {
+    ) -> actor.Next(Nil, Message) {
 
     //io.println("[WORKER]: got message")
     
@@ -97,12 +90,12 @@ fn handle_worker_messages (
         //     actor.continue(state)
         // }
 
-        Calculate(k, count, start_num) -> {
+        Calculate(coord_sub, k, count, start_num) -> {
 
             //io.println("[WORKER]: recvd Calculate message:\nk: " <> int.to_string(k) <> " count: " <> int.to_string(count) <> " start_num: " <> int.to_string(start_num))
 
             let ret_list = calc_sum_squares(k, count, start_num)
-            actor.send(state.coord_sub, Check(state.sub, int_list: ret_list))
+            actor.send(coord_sub, Check(int_list: ret_list))
             actor.continue(state)
         }
 

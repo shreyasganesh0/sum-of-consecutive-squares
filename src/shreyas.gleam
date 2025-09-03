@@ -6,6 +6,8 @@ import gleam/list
 import gleam/result
 
 import gleam/otp/actor
+import gleam/otp/static_supervisor as supervisor
+import gleam/otp/supervision
 
 import gleam/erlang/process
 import gleam/erlang/node
@@ -165,74 +167,55 @@ pub fn calc_sum_of_squares(n: Int, k: Int, max_workers: Int) -> Result(Int, Pars
     let count = n / num_workers
     let last_count = count + {n % num_workers} 
 
-    let worker_list = list.range(1, num_workers - 1)
-
-    //io.println("Number of availble workers: " <> int.to_string(num_workers))
-
-    // let _ = supervisor.new(strategy: supervisor.OneForOne)
-    // |> supervisor.add(supervision.worker(fn() {coordinator.start(count,
-    //                                                             last_count,
-    //                                                             k,
-    //                                                             num_workers
-    //                                                             )
-    //                                     } 
-    //                                 )
-    // )
-    // |> list.fold(worker_list, _, fn(builder, _) -> supervisor.Builder {
-    //                                 supervisor.add(
-    //                                     builder,
-    //                                     supervision.worker(worker.start)
-    //                                 )
-    //                             }
-    //     )
-    // |> supervisor.start
-
+    io.println("Number of availble workers: " <> int.to_string(num_workers))
+    
     let main_sub = process.new_subject()
 
-    let coord = coordinator.start(count,
-        last_count,
-        k,
-        num_workers,
-        main_sub,
-    )
+    let worker_list: List(process.Subject(worker.Message)) = []
+    let sup_build = supervisor.new(strategy: supervisor.OneForOne)
+    let #(final_worker_list, sup_builder) = list.fold(list.range(1, num_workers), 
+                                #(worker_list, sup_build), 
+                                fn (curr_tup, _) {
+                                    
+                                    let #(worker_list, sup_builder) = curr_tup 
 
-    case coord {
+                                    let wrk = worker.start()
 
-        Ok(act) -> {
+                                
 
-            let coord_subject = act.data
-            list.each(worker_list, fn(a) {
-
-                                    let assert Ok(curr_worker) = worker.start(coord_subject)
-                                    process.send(curr_worker.data, 
-                                                 worker.Calculate(
-                                                                k: k, 
-                                                                count: count,
-                                                                start_num: {1 + {a - 1} * count},
-                                                  )
+                                    let assert Ok(sub) = wrk
+                                    #(
+                                        [sub.data, ..worker_list],
+                                        supervisor.add(sup_builder, supervision.worker(fn() {wrk})
+                                                                    |> supervision.restart(
+                                                                        supervision.Transient)
+                                        )
                                     )
                                 }
+                      )
+
+    let crd = coordinator.start(
+                    count,
+                    last_count,
+                    k,
+                    num_workers,
+                    final_worker_list,
+                    main_sub
+     )
+
+    //let assert Ok(cs) = crd
+
+    let _ = supervisor.add(sup_builder, supervision.worker(fn() {crd})
+                                        |> supervision.significant(True)
+                                        |> supervision.restart(supervision.Transient)
             )
+    |> supervisor.auto_shutdown(supervisor.AllSignificant)
+    |> supervisor.start
 
-            let assert Ok(curr_worker) = worker.start(coord_subject)
-            process.send(curr_worker.data, 
-                         worker.Calculate(
-                                        k: k, 
-                                        count: last_count,
-                                        start_num: 1 + {num_workers - 1} * count,
-                          )
-            )
-            process.receive_forever(main_sub)
-            Ok(0)
-        }
+    process.receive_forever(main_sub)
+    
 
-        Error(error) -> {
-            io.println("Failed to start coordinator")
-            Error(ActorError(error))
-        }
-    }
-
-
+    Ok(0)
 
 
 }
