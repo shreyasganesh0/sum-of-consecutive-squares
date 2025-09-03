@@ -8,6 +8,8 @@ import gleam/result
 import gleam/otp/actor
 
 import gleam/erlang/process
+import gleam/erlang/node
+import gleam/erlang/atom
 
 import worker
 import coordinator
@@ -16,6 +18,7 @@ pub type ParseError {
     NotEnoughArgs(required: Int)
     InvalidArgs
     ActorError(error: actor.StartError)
+    NodeError(error: node.ConnectError)
 }
 
 pub fn main() -> Result(Int, ParseError) {
@@ -50,6 +53,38 @@ pub fn main() -> Result(Int, ParseError) {
                 Ok(#(int1, int2, int3))
             }
 
+        }
+
+        [str1, str2, str3, remote_node_addr] -> {
+
+            {
+                use int1 <- result.try(int.parse(str1)
+                |>result.map_error(fn(_) { InvalidArgs }))
+
+                use int2 <- result.try(int.parse(str2)
+                |>result.map_error(fn(_) { InvalidArgs }))
+
+                use int3 <- result.try(int.parse(str3)
+                |>result.map_error(fn(_) { InvalidArgs }))
+
+                let addr_atom = atom.create(remote_node_addr)
+
+                let ret = case node.connect(addr_atom) {
+
+                    Ok(_my_node) -> {
+
+                        Ok(#(int1, int2, int3))
+                    }
+
+                    Error(err) -> {
+                    
+                        Error(NodeError(error: err))
+
+                    }
+                }
+
+                ret
+            }
         }
 
         _ -> Error(NotEnoughArgs(required: 3))
@@ -91,7 +126,24 @@ pub fn main() -> Result(Int, ParseError) {
                 }
 
             }
-                Error(ActorError(actor_error))
+            Error(ActorError(actor_error))
+        }
+
+        Error(NodeError(connect_err)) -> {
+
+            case connect_err {
+                node.FailedToConnect -> {
+
+                    io.println("Failed to connect to node")
+                    Error(NodeError(connect_err))
+                } 
+
+                node.LocalNodeIsNotAlive -> {
+
+                    io.println("local node not alive, unalbe to connect to other nodes.")
+                    Error(NodeError(connect_err))
+                }
+            }
         }
                                         
     }
