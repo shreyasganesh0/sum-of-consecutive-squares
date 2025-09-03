@@ -30,7 +30,7 @@ gleam run <N> <k> [max_workers]   # Run the project
 
 2. Solution for ```gleam run 1000000 4``` **does not exist** 
 
-3. the ratio of CPU_TIME:REAL_TIME was 0.1666/0.02644 = 6.3106
+3. the ratio of CPU_TIME:REAL_TIME was (0.25 + 0.13)/0.172 = **2.209**
     - for reference with 1 worker the ratio was 1.7 (due to worker cleanup overhead)
     - ratios for bigger solutions of 100000000 2 for example which has solutions gave us a ratio of 5-6
     which is closer to what is to be expected
