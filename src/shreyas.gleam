@@ -1,9 +1,12 @@
 import argv
 import gleam/io
 import gleam/int
+import gleam/float
 //import gleam/string
 import gleam/list
 import gleam/result
+import gleam/time/duration
+import gleam/time/timestamp
 
 import gleam/otp/actor
 import gleam/otp/static_supervisor as supervisor
@@ -25,9 +28,11 @@ pub type ParseError {
 
 pub fn main() -> Result(Int, ParseError) {
 
+    let start = timestamp.system_time()
+
     let res = case argv.load().arguments {
 
-        [str1, str2] -> {
+        [node_type, str1, str2] -> {
 
             {
                 use int1 <- result.try(int.parse(str1)
@@ -36,11 +41,11 @@ pub fn main() -> Result(Int, ParseError) {
                 use int2 <- result.try(int.parse(str2)
                 |>result.map_error(fn(_) { InvalidArgs }))
 
-                Ok(#(int1, int2, 100))
+                Ok(#(node_type, int1, int2, 100))
             }
         }
 
-        [str1, str2, str3] -> {
+        [node_type, str1, str2, str3] -> {
 
             {
                 use int1 <- result.try(int.parse(str1)
@@ -52,12 +57,12 @@ pub fn main() -> Result(Int, ParseError) {
                 use int3 <- result.try(int.parse(str3)
                 |>result.map_error(fn(_) { InvalidArgs }))
 
-                Ok(#(int1, int2, int3))
+                Ok(#(node_type, int1, int2, int3))
             }
 
         }
 
-        [str1, str2, str3, remote_node_addr] -> {
+        [node_type, str1, str2, str3, remote_node_addr] -> {
 
             {
                 use int1 <- result.try(int.parse(str1)
@@ -75,7 +80,7 @@ pub fn main() -> Result(Int, ParseError) {
 
                     Ok(_my_node) -> {
 
-                        Ok(#(int1, int2, int3))
+                        Ok(#(node_type, int1, int2, int3))
                     }
 
                     Error(err) -> {
@@ -92,11 +97,16 @@ pub fn main() -> Result(Int, ParseError) {
         _ -> Error(NotEnoughArgs(required: 3))
     }
 
-    case res {
+    let ret = case res {
 
-        Ok(#(num1, num2, num3)) -> {
+        Ok(#(node_type, num1, num2, num3)) -> {
 
-            calc_sum_of_squares(num1, num2, num3)
+            let end = timestamp.system_time()
+            let total_real_duration = timestamp.difference(start, end)
+
+            let real_time_s = duration.to_seconds(total_real_duration)
+            io.println("Time taken for main: " <> float.to_string(real_time_s))
+            calc_sum_of_squares(node_type, num1, num2, num3)
         }
 
         Error(InvalidArgs) -> {
@@ -150,12 +160,15 @@ pub fn main() -> Result(Int, ParseError) {
                                         
     }
 
+    ret
+
 }
 
 
-pub fn calc_sum_of_squares(n: Int, k: Int, max_workers: Int) -> Result(Int, ParseError) {
+pub fn calc_sum_of_squares(node_type: String, n: Int, k: Int, max_workers: Int) -> Result(Int, ParseError) {
 
     //let num_cores = system.schedulers_online()
+    let start = timestamp.system_time()
 
     let num_workers = case n <= max_workers {
 
@@ -171,49 +184,117 @@ pub fn calc_sum_of_squares(n: Int, k: Int, max_workers: Int) -> Result(Int, Pars
     
     let main_sub = process.new_subject()
 
-    let worker_list: List(process.Subject(worker.Message)) = []
     let sup_build = supervisor.new(strategy: supervisor.OneForOne)
-    let #(final_worker_list, sup_builder) = list.fold(list.range(1, num_workers), 
-                                #(worker_list, sup_build), 
-                                fn (curr_tup, _) {
-                                    
-                                    let #(worker_list, sup_builder) = curr_tup 
+    
+    let #(_worker_list, sup_builder) = case node_type {
 
-                                    let wrk = worker.start()
+        "Worker" -> {
+            let worker_list: List(process.Subject(worker.Message)) = []
+            list.fold(
+                list.range(1, num_workers), 
+                #(worker_list, sup_build), 
+                fn (curr_tup, _) {
+                    
+                    let #(worker_list, sup_builder) = curr_tup 
 
-                                
+                    let wrk = worker.start()
+                    let assert Ok(sub) = wrk
+                    #(
+                        [sub.data, ..worker_list],
+                        supervisor.add(
+                            sup_builder, 
+                            supervision.worker(fn() {wrk}
+                            )
+                        |> supervision.restart(
+                            supervision.Transient)
+                        )
+                    )
+                }
+             )
 
-                                    let assert Ok(sub) = wrk
-                                    #(
-                                        [sub.data, ..worker_list],
-                                        supervisor.add(sup_builder, supervision.worker(fn() {wrk})
-                                                                    |> supervision.restart(
-                                                                        supervision.Transient)
-                                        )
-                                    )
-                                }
-                      )
+        }
 
-    let crd = coordinator.start(
-                    count,
-                    last_count,
-                    k,
-                    num_workers,
-                    final_worker_list,
-                    main_sub
-     )
+        "Coordinator" -> {
 
-    //let assert Ok(cs) = crd
+            let crd = coordinator.start(
+                            count,
+                            last_count,
+                            k,
+                            num_workers,
+                            [],
+                            main_sub
+             )
 
-    let _ = supervisor.add(sup_builder, supervision.worker(fn() {crd})
-                                        |> supervision.significant(True)
-                                        |> supervision.restart(supervision.Transient)
-            )
-    |> supervisor.auto_shutdown(supervisor.AllSignificant)
+            let bldr = supervisor.add(sup_build, supervision.worker(fn() {crd})
+                                                |> supervision.significant(True)
+                                                |> supervision.restart(supervision.Transient)
+                    )
+            #([],bldr)
+
+        }
+
+        "Complete" -> {
+            let worker_list: List(process.Subject(worker.Message)) = []
+            let #(final_worker_list, sup_builder) = list.fold(
+                list.range(1, num_workers), 
+                #(worker_list, sup_build), 
+                fn (curr_tup, _) {
+                    
+                    let #(worker_list, sup_builder) = curr_tup 
+
+                    let wrk = worker.start()
+                    let assert Ok(sub) = wrk
+                    #(
+                        [sub.data, ..worker_list],
+                        supervisor.add(
+                            sup_builder, 
+                            supervision.worker(fn() {wrk}
+                            )
+                        |> supervision.restart(
+                            supervision.Transient)
+                        )
+                    )
+                }
+             )
+            let crd = coordinator.start(
+                            count,
+                            last_count,
+                            k,
+                            num_workers,
+                            final_worker_list,
+                            main_sub
+             )
+
+            let bldr = supervisor.add(sup_builder, supervision.worker(fn() {crd})
+                                                |> supervision.significant(True)
+                                                |> supervision.restart(supervision.Transient)
+                    )
+            #(final_worker_list, bldr)
+
+        }
+        _ -> {
+            process.send(main_sub, Nil)
+            io.println("----- Invalid node type passed ----")
+            #([], sup_build)
+        }
+    }
+
+    let _ = supervisor.auto_shutdown(sup_builder, supervisor.AllSignificant)
     |> supervisor.start
+
+    let end = timestamp.system_time()
+    let total_real_duration = timestamp.difference(start, end)
+
+    let real_time_s = duration.to_seconds(total_real_duration)
+    io.println("Time taken for startup: " <> float.to_string(real_time_s))
 
     process.receive_forever(main_sub)
     
+    let end_new = timestamp.system_time()
+    let total_real_duration = timestamp.difference(start, end_new)
+
+    let real_time_s = duration.to_seconds(total_real_duration)
+    io.println("Time taken for end: " <> float.to_string(real_time_s))
 
     Ok(0)
 

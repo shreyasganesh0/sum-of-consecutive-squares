@@ -10,12 +10,15 @@ gleam add sum_of_consecutive_squares@1
 ## Usage 
 
 ```sh
-./shreyas <N> <k> [max_workers]
+gleam build
+gleam run -m gleescript
+./shreyas <Worker-type> <N> <k> [max_workers]
 
         OR
 
-gleam run <N> <k> [max_workers]   # Run the project
+gleam run <Worker-type> <N> <k> [max_workers]   # Run the project
 ```
+- Worker-type can be type "Complete", "Worker", "Coordinator"
 - N is the end of the Domain(the maximum number in the calculation space)
 - k grouping of numbers per calculation for a potential solution
 - Optional max_workers used for benchmarking puprposes
