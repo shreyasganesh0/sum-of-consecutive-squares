@@ -19,6 +19,7 @@ type CoordState {
         num_workers: Int,
         finished_count: Int,
         main_subject: process.Subject(Nil),
+        total_printed: Int,
     )
 }
 
@@ -80,6 +81,7 @@ fn init(
                         num_workers: num_workers,
                         finished_count: 0,
                         main_subject: main_subject,
+                        total_printed: 0,
                     )
 
     let init = actor.initialised(init_state)
@@ -150,27 +152,36 @@ fn handle_coord_message(
             // io.println("CPU TIME / REAL TIME Ratio: " <> float.to_string(ratio))
             //
 
+
             actor.stop()
         }
 
         worker.Check(num_list) -> {
 
             //io.println("[COORDINATOR]: rcvd check message from worker")
-            list.each(num_list, fn(a) {
+            let num_count = list.fold(num_list, 0, fn(acc, a) {
 
                                     io.println(int.to_string(a))
+                                    acc + 1
                                 }
             )
 
             let new_state = CoordState(
                 ..state,
-                finished_count: state.finished_count + 1
+                finished_count: state.finished_count + 1,
+                total_printed: state.total_printed + num_count
             )
 
             case new_state.finished_count == new_state.num_workers {
 
                 True -> {
 
+                    case state.total_printed == 0 {
+
+                        True -> io.println("----- NO ANSWERS FOUND -----")
+
+                        False -> Nil
+                    }
                     actor.send(state.main_subject, Nil)
                     actor.stop()
                 }

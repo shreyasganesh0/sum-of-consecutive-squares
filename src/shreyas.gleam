@@ -1,11 +1,11 @@
 import argv
 import gleam/io
 import gleam/int
-import gleam/float
+//import gleam/float
 //import gleam/string
 import gleam/list
 import gleam/result
-import gleam/time/duration
+//import gleam/time/duration
 import gleam/time/timestamp
 
 import gleam/otp/actor
@@ -28,7 +28,7 @@ pub type ParseError {
 
 pub fn main() -> Result(Int, ParseError) {
 
-    let start = timestamp.system_time()
+    let _start = timestamp.system_time()
 
     let res = case argv.load().arguments {
 
@@ -134,11 +134,11 @@ pub fn main() -> Result(Int, ParseError) {
 
         Ok(#(node_type, num1, num2, num3)) -> {
 
-            let end = timestamp.system_time()
-            let total_real_duration = timestamp.difference(start, end)
-
-            let real_time_s = duration.to_seconds(total_real_duration)
-            io.println("Time taken for main: " <> float.to_string(real_time_s))
+            // let end = timestamp.system_time()
+            // let total_real_duration = timestamp.difference(start, end)
+            //
+            // let real_time_s = duration.to_seconds(total_real_duration)
+            // io.println("Time taken for main: " <> float.to_string(real_time_s))
             calc_sum_of_squares(node_type, num1, num2, num3)
         }
 
@@ -201,7 +201,7 @@ pub fn main() -> Result(Int, ParseError) {
 pub fn calc_sum_of_squares(node_type: String, n: Int, k: Int, max_workers: Int) -> Result(Int, ParseError) {
 
     //let num_cores = system.schedulers_online()
-    let start = timestamp.system_time()
+    let _start = timestamp.system_time()
 
     let num_workers = case n <= max_workers {
 
@@ -310,19 +310,19 @@ pub fn calc_sum_of_squares(node_type: String, n: Int, k: Int, max_workers: Int) 
     let _ = supervisor.auto_shutdown(sup_builder, supervisor.AllSignificant)
     |> supervisor.start
 
-    let end = timestamp.system_time()
-    let total_real_duration = timestamp.difference(start, end)
-
-    let real_time_s = duration.to_seconds(total_real_duration)
-    io.println("Time taken for startup: " <> float.to_string(real_time_s))
+    // let end = timestamp.system_time()
+    // let total_real_duration = timestamp.difference(start, end)
+    //
+    // let real_time_s = duration.to_seconds(total_real_duration)
+    // io.println("Time taken for startup: " <> float.to_string(real_time_s))
 
     process.receive_forever(main_sub)
     
-    let end_new = timestamp.system_time()
-    let total_real_duration = timestamp.difference(start, end_new)
-
-    let real_time_s = duration.to_seconds(total_real_duration)
-    io.println("Time taken for end: " <> float.to_string(real_time_s))
+    // let end_new = timestamp.system_time()
+    // let total_real_duration = timestamp.difference(start, end_new)
+    //
+    // let real_time_s = duration.to_seconds(total_real_duration)
+    // io.println("Time taken for end: " <> float.to_string(real_time_s))
 
     Ok(0)
 
