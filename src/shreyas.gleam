@@ -5,6 +5,7 @@ import gleam/int
 //import gleam/string
 import gleam/list
 import gleam/result
+import gleam/option.{type Option, Some, None}
 //import gleam/time/duration
 import gleam/time/timestamp
 
@@ -26,6 +27,10 @@ pub type ParseError {
     NodeError(error: node.ConnectError)
 }
 
+@external(erlang, "erlang", "register")
+pub fn register_global(name: atom.Atom, pid: process.Pid) -> Nil
+
+
 pub fn main() -> Result(Int, ParseError) {
 
     let _start = timestamp.system_time()
@@ -41,7 +46,7 @@ pub fn main() -> Result(Int, ParseError) {
                 use int2 <- result.try(int.parse(str2)
                 |>result.map_error(fn(_) { InvalidArgs }))
 
-                Ok(#("", int1, int2, 100))
+                Ok(#("", int1, int2, 100, None))
             }
         }
 
@@ -60,7 +65,7 @@ pub fn main() -> Result(Int, ParseError) {
                         |>result.map_error(fn(_) { InvalidArgs }))
                         use int3 <- result.try(int.parse(str3)
                         |>result.map_error(fn(_) { InvalidArgs }))
-                        Ok(#("", intx, int2, int3))
+                        Ok(#("", intx, int2, int3, None))
                     }
 
                     Error(_) -> {
@@ -69,7 +74,7 @@ pub fn main() -> Result(Int, ParseError) {
                         |>result.map_error(fn(_) { InvalidArgs }))
                         use int3 <- result.try(int.parse(str3)
                         |>result.map_error(fn(_) { InvalidArgs }))
-                        Ok(#(str1, int2, int3, 100))
+                        Ok(#(str1, int2, int3, 100, None))
                     }
                 }
 
@@ -90,7 +95,7 @@ pub fn main() -> Result(Int, ParseError) {
                 use int3 <- result.try(int.parse(str3)
                 |>result.map_error(fn(_) { InvalidArgs }))
 
-                Ok(#(node_type, int1, int2, int3))
+                Ok(#(node_type, int1, int2, int3, None))
             }
 
         }
@@ -111,9 +116,9 @@ pub fn main() -> Result(Int, ParseError) {
 
                 let ret = case node.connect(addr_atom) {
 
-                    Ok(_my_node) -> {
+                    Ok(my_node) -> {
 
-                        Ok(#(node_type, int1, int2, int3))
+                        Ok(#(node_type, int1, int2, int3, Some(my_node)))
                     }
 
                     Error(err) -> {
@@ -130,16 +135,21 @@ pub fn main() -> Result(Int, ParseError) {
         _ -> Error(NotEnoughArgs(required: 3))
     }
 
-    let ret = case res {
+    case res {
 
-        Ok(#(node_type, num1, num2, num3)) -> {
+        Ok(#(node_type, num1, num2, num3, maybe_node)) -> {
 
             // let end = timestamp.system_time()
             // let total_real_duration = timestamp.difference(start, end)
             //
             // let real_time_s = duration.to_seconds(total_real_duration)
             // io.println("Time taken for main: " <> float.to_string(real_time_s))
-            calc_sum_of_squares(node_type, num1, num2, num3)
+            case maybe_node {
+
+                Some(remote_node) -> calc_sum_of_squares_remote(node_type, num1, num2, num3, remote_node)
+
+                None -> calc_sum_of_squares(node_type, num1, num2, num3)
+            }
         }
 
         Error(InvalidArgs) -> {
@@ -193,12 +203,75 @@ pub fn main() -> Result(Int, ParseError) {
                                         
     }
 
-    ret
-
 }
 
+pub fn calc_sum_of_squares_remote(node_type: String, 
+                            n: Int,
+                            _k: Int,
+                            max_workers: Int,
+                            remote_node: node.Node) -> Result(Int, ParseError) {
 
-pub fn calc_sum_of_squares(node_type: String, n: Int, k: Int, max_workers: Int) -> Result(Int, ParseError) {
+    let num_workers = case n <= max_workers {
+
+        True -> n
+
+        False -> max_workers
+    }
+
+    io.println("Number of availble workers: " <> int.to_string(num_workers))
+    
+    let main_sub = process.new_subject()
+
+    let sup_build = supervisor.new(strategy: supervisor.OneForOne)
+    
+    let #(_worker_list, sup_builder) = case node_type {
+
+        "Worker" -> {
+
+            let worker_list: List(process.Subject(worker.Message)) = []
+            list.fold(
+                list.range(1, num_workers), 
+                #(worker_list, sup_build), 
+                fn (curr_tup, _) {
+                    
+                    let #(worker_list, sup_builder) = curr_tup 
+
+                    let wrk = worker.start(Some(remote_node))
+                    let assert Ok(sub) = wrk
+                    #(
+                        [sub.data, ..worker_list],
+                        supervisor.add(
+                            sup_builder, 
+                            supervision.worker(fn() {wrk}
+                            )
+                        |> supervision.restart(
+                            supervision.Transient)
+                        )
+                    )
+                }
+             )
+
+        }
+
+        _ -> { 
+            io.println("Remote node not expected for non worker nodes")
+            process.send(main_sub, Nil)
+            #([], sup_build) 
+        }
+    }
+    let _ = supervisor.auto_shutdown(sup_builder, supervisor.AllSignificant)
+    |> supervisor.start
+
+    process.receive_forever(main_sub)
+
+    Ok(0)
+}
+
+pub fn calc_sum_of_squares(node_type: String, 
+                            n: Int,
+                            k: Int,
+                            max_workers: Int,
+                        ) -> Result(Int, ParseError) {
 
     //let num_cores = system.schedulers_online()
     let _start = timestamp.system_time()
@@ -221,32 +294,6 @@ pub fn calc_sum_of_squares(node_type: String, n: Int, k: Int, max_workers: Int) 
     
     let #(_worker_list, sup_builder) = case node_type {
 
-        "Worker" -> {
-            let worker_list: List(process.Subject(worker.Message)) = []
-            list.fold(
-                list.range(1, num_workers), 
-                #(worker_list, sup_build), 
-                fn (curr_tup, _) {
-                    
-                    let #(worker_list, sup_builder) = curr_tup 
-
-                    let wrk = worker.start()
-                    let assert Ok(sub) = wrk
-                    #(
-                        [sub.data, ..worker_list],
-                        supervisor.add(
-                            sup_builder, 
-                            supervision.worker(fn() {wrk}
-                            )
-                        |> supervision.restart(
-                            supervision.Transient)
-                        )
-                    )
-                }
-             )
-
-        }
-
         "Coordinator" -> {
 
             let crd = coordinator.start(
@@ -255,8 +302,13 @@ pub fn calc_sum_of_squares(node_type: String, n: Int, k: Int, max_workers: Int) 
                             k,
                             num_workers,
                             [],
-                            main_sub
+                            main_sub,
+                            True,
              )
+
+            let assert Ok(coord_sub) = crd
+            let assert Ok(coord_pid) = process.subject_owner(coord_sub.data)
+            register_global(atom.create("coordinator"), coord_pid)
 
             let bldr = supervisor.add(sup_build, supervision.worker(fn() {crd})
                                                 |> supervision.significant(True)
@@ -275,7 +327,7 @@ pub fn calc_sum_of_squares(node_type: String, n: Int, k: Int, max_workers: Int) 
                     
                     let #(worker_list, sup_builder) = curr_tup 
 
-                    let wrk = worker.start()
+                    let wrk = worker.start(None)
                     let assert Ok(sub) = wrk
                     #(
                         [sub.data, ..worker_list],
@@ -295,7 +347,8 @@ pub fn calc_sum_of_squares(node_type: String, n: Int, k: Int, max_workers: Int) 
                             k,
                             num_workers,
                             final_worker_list,
-                            main_sub
+                            main_sub,
+                            False,
              )
 
             let bldr = supervisor.add(sup_builder, supervision.worker(fn() {crd})

@@ -2,8 +2,12 @@
 import gleam/int
 import gleam/list
 import gleam/float
+import gleam/option.{type Option, Some, None}
 
 import gleam/otp/actor
+
+import gleam/erlang/node
+import gleam/erlang/atom
 
 import gleam/erlang/process
 
@@ -18,8 +22,6 @@ pub type Message {
 
     Shutdown
 
-    TestMessage
-
     TryRegister(self_subject: process.Subject(Message))
 
     RegisterWorker(worker_subject: process.Subject(Message))
@@ -29,14 +31,34 @@ pub type Message {
     Check(int_list: List(Int))
 }
 
+@external(erlang, "erlang", "whereis")
+pub fn whereis(name: atom.Atom) -> process.Pid
+
+@external(erlang, "erlang", "send")
+pub fn send_rem(dst: #(atom.Atom, node.Node), msg: Message) -> process.Pid
+
 pub fn start(
+    remote_node: Option(node.Node)
     ) -> Result(actor.Started(process.Subject(Message)), actor.StartError) {
 
     //io.println("[WORKER]: start function started")
 
+    let coord_name = atom.create("coordinator")
+
+
     let ret = actor.new(Nil)
     |> actor.on_message(handle_worker_messages)
     |> actor.start 
+
+    let assert Ok(ret_sub) = ret
+    case remote_node {
+        Some(node) -> {
+            send_rem(#(coord_name, node), RegisterWorker(ret_sub.data))  
+            Nil
+        }
+
+        None -> Nil
+    }
 
     //io.println("[WORKER]: start function finished")
     ret

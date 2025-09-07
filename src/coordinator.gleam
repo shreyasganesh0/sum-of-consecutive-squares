@@ -16,10 +16,15 @@ import worker.{type Message}
 type CoordState {
 
     CoordState(
+        count: Int, 
+        last_count: Int,
+        k: Int, 
         num_workers: Int,
         finished_count: Int,
         main_subject: process.Subject(Nil),
+        sub: process.Subject(Message),
         total_printed: Int,
+        curr_idx: Int,
     )
 }
 
@@ -30,6 +35,7 @@ pub fn start(
     num_workers: Int, 
     worker_list: List(process.Subject(Message)),
     main_subject: process.Subject(Nil),
+    is_remote: Bool,
     ) -> Result(
         actor.Started(process.Subject(Message)),
         actor.StartError) {
@@ -45,7 +51,8 @@ pub fn start(
                                                         k,
                                                         num_workers,
                                                         worker_list,
-                                                        main_subject
+                                                        main_subject,
+                                                        is_remote
                                                     )
                                                   }
                )
@@ -63,6 +70,7 @@ fn init(
     num_workers: Int,
     worker_list: List(process.Subject(Message)),
     main_subject: process.Subject(Nil),
+    is_remote: Bool,
     ) -> Result(
         actor.Initialised(
             CoordState, 
@@ -78,47 +86,58 @@ fn init(
 
 
     let init_state = CoordState(
+                        sub: sub,
+                        count: count,
+                        last_count: last_count,
+                        k: k,
                         num_workers: num_workers,
                         finished_count: 0,
                         main_subject: main_subject,
                         total_printed: 0,
+                        curr_idx: 0,
                     )
 
     let init = actor.initialised(init_state)
     |> actor.returning(sub)
     //io.println("[COORDINATOR]: init function finished")
 
-    list.index_map(worker_list, fn(worker_sub, curr_idx) {
+    case is_remote {
 
+        False -> {
+            list.index_map(worker_list, fn(worker_sub, curr_idx) {
+                                           case curr_idx < num_workers - 1 {
 
-                               case curr_idx < num_workers - 1 {
+                                           True -> {
+                                               process.send(worker_sub, worker.Calculate(
+                                                                                coord_sub: sub, 
+                                                                                k: k,
+                                                                                count: count,
+                                                                                start_num:  1 + {curr_idx * count},
+                                                                        )
+                                               )
+                                           }
 
-                                   True -> {
-                                       process.send(worker_sub, worker.Calculate(
-                                                                        coord_sub: sub, 
-                                                                        k: k,
-                                                                        count: count,
-                                                                        start_num: 1 + {curr_idx * count},
-                                                                   )
-                                       )
-                                   }
+                                           False -> {
 
-                                   False -> {
+                                               process.send(worker_sub, worker.Calculate(
+                                                                                coord_sub: sub, 
+                                                                                k: k,
+                                                                                count: last_count,
+                                                                                start_num: 1 + {curr_idx * count},
+                                                                        )
+                                               )
 
-                                       process.send(worker_sub, worker.Calculate(
-                                                                        coord_sub: sub, 
-                                                                        k: k,
-                                                                        count: last_count,
-                                                                        start_num: 1 + {curr_idx * count},
-                                                                )
-                                       )
+                                           }
+                                       }
 
-                                   }
-                               }
+                                        #(worker_sub, curr_idx)
+                                    }
+            )
+            Nil
+        }
 
-                                #(worker_sub, curr_idx)
-                            }
-    )
+        True -> Nil
+    }
 
     Ok(init)
 }
@@ -154,6 +173,41 @@ fn handle_coord_message(
 
 
             actor.stop()
+        }
+
+        worker.RegisterWorker(worker_sub) -> {
+
+            case state.curr_idx < state.num_workers - 1 {
+
+                True -> {
+
+                    process.send(worker_sub, worker.Calculate(
+                                                        coord_sub: state.sub, 
+                                                        k: state.k,
+                                                        count: state.count,
+                                                        start_num: 1 + {state.curr_idx * state.count},
+                                                    )
+                    )
+                }
+
+                False -> {
+
+                    process.send(worker_sub, worker.Calculate(
+                                                        coord_sub: state.sub, 
+                                                        k: state.k,
+                                                        count: state.last_count,
+                                                        start_num: 1 + {state.curr_idx * state.count},
+                                                    )
+                    )
+                }
+
+            }
+
+            let new_state = CoordState(
+                                ..state,
+                                curr_idx: state.curr_idx + 1,
+                            )
+            actor.continue(new_state)
         }
 
         worker.Check(num_list) -> {
