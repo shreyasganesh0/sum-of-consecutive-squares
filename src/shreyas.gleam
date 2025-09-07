@@ -32,7 +32,7 @@ pub fn main() -> Result(Int, ParseError) {
 
     let res = case argv.load().arguments {
 
-        [node_type, str1, str2] -> {
+        [str1, str2] -> {
 
             {
                 use int1 <- result.try(int.parse(str1)
@@ -41,9 +41,42 @@ pub fn main() -> Result(Int, ParseError) {
                 use int2 <- result.try(int.parse(str2)
                 |>result.map_error(fn(_) { InvalidArgs }))
 
-                Ok(#(node_type, int1, int2, 100))
+                Ok(#("", int1, int2, 100))
             }
         }
+
+        [str1, str2, str3] -> {
+
+           {
+
+                let int1 = int.parse(str1)
+                           |> result.map_error(fn(_) { InvalidArgs})
+                           
+                case int1 {
+
+                    Ok(intx) -> {
+
+                        use int2 <- result.try(int.parse(str2)
+                        |>result.map_error(fn(_) { InvalidArgs }))
+                        use int3 <- result.try(int.parse(str3)
+                        |>result.map_error(fn(_) { InvalidArgs }))
+                        Ok(#("", intx, int2, int3))
+                    }
+
+                    Error(_) -> {
+
+                        use int2 <- result.try(int.parse(str2)
+                        |>result.map_error(fn(_) { InvalidArgs }))
+                        use int3 <- result.try(int.parse(str3)
+                        |>result.map_error(fn(_) { InvalidArgs }))
+                        Ok(#(str1, int2, int3, 100))
+                    }
+                }
+
+            }
+
+        }
+
 
         [node_type, str1, str2, str3] -> {
 
@@ -115,8 +148,8 @@ pub fn main() -> Result(Int, ParseError) {
         }
 
         Error(NotEnoughArgs(required)) -> {
-            io.println("Expected 3 args")
-            io.println("Usage: gleam run <N> <k> <max_workers>")
+            io.println("invalid args sent")
+            io.println("Usage: gleam run [Node-Type] <N> <k> <max_workers>")
             Error(NotEnoughArgs(required: required))
         }
 
@@ -233,7 +266,7 @@ pub fn calc_sum_of_squares(node_type: String, n: Int, k: Int, max_workers: Int) 
 
         }
 
-        "Complete" -> {
+        _ -> {
             let worker_list: List(process.Subject(worker.Message)) = []
             let #(final_worker_list, sup_builder) = list.fold(
                 list.range(1, num_workers), 
@@ -271,11 +304,6 @@ pub fn calc_sum_of_squares(node_type: String, n: Int, k: Int, max_workers: Int) 
                     )
             #(final_worker_list, bldr)
 
-        }
-        _ -> {
-            process.send(main_sub, Nil)
-            io.println("----- Invalid node type passed ----")
-            #([], sup_build)
         }
     }
 
