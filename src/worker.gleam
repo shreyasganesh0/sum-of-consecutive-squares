@@ -43,7 +43,8 @@ pub fn start(
 
     //io.println("[WORKER]: start function started")
 
-    let coord_name = atom.create("coordinator")
+    let assert Ok(coord_name) = atom.get("coordinator")
+    let coord_pid = whereis(coord_name)
 
 
     let ret = actor.new(Nil)
@@ -53,7 +54,7 @@ pub fn start(
     let assert Ok(ret_sub) = ret
     case remote_node {
         Some(node) -> {
-            send_rem(#(coord_name, node), RegisterWorker(ret_sub.data))  
+            send_rem(coord_pid, RegisterWorker(ret_sub.data))  
             Nil
         }
 
@@ -97,20 +98,6 @@ fn handle_worker_messages (
     case message {
 
         Shutdown -> actor.stop()
-
-        // TestMessage -> {
-        //     //io.println("[WORKER]; ____GOT_TEST____")
-        //     actor.continue(state)
-        // }
-        //
-        // TryRegister(sub) -> {
-        //
-        //     //io.println("[WORKER]: recvd TryRegister message")
-        //
-        //     //actor.send(state.coord_sub, TestMessage)
-        //     actor.send(state.coord_sub, RegisterWorker(sub))
-        //     actor.continue(state)
-        // }
 
         Calculate(coord_sub, k, count, start_num) -> {
 

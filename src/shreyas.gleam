@@ -5,7 +5,7 @@ import gleam/int
 //import gleam/string
 import gleam/list
 import gleam/result
-import gleam/option.{type Option, Some, None}
+import gleam/option.{Some, None}
 //import gleam/time/duration
 import gleam/time/timestamp
 
