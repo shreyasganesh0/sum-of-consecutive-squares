@@ -47,7 +47,7 @@ pub fn start(
     //io.println("[WORKER]: start function started")
 
     let coord_name = atom.create("shreyas_coordinator")
-    let _coord_pid = whereis_name(coord_name)
+    let coord_pid = whereis_name(coord_name)
 
     let ret = actor.new(Nil)
     |> actor.on_message(handle_worker_messages)

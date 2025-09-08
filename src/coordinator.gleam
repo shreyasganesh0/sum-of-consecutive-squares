@@ -70,22 +70,6 @@ pub fn start(
     |> actor.start
     io.println("[COORDINATOR]: start function end")
 
-    let assert Ok(sub) = act
-    let assert Ok(pid) = process.subject_owner(sub.data)
-
-    case register_name(atom.create("shreyas_coordinator"), pid)
-    |> atom.to_string {
-        
-        "no" -> io.println("failed to register name")
-
-        "yes" -> io.println("registered coord name globally")
-
-        _ -> io.println("found random name ")
-    }
-    registered_names()
-    |> list.each(fn(a) {
-        io.println("[COORDINATOR]: registered atoms: " <> atom.to_string(a))
-    })
     act
 }
 
@@ -165,7 +149,32 @@ fn init(
             Nil
         }
 
-        True -> Nil
+        True -> {
+
+			let assert Ok(pid) = process.subject_owner(sub)
+
+			case register_name(atom.create("shreyas_coordinator"), pid)
+			|> atom.to_string {
+				
+				"no" -> io.println("failed to register name")
+
+				"yes" -> io.println("registered coord name globally")
+
+				_ -> io.println("found random name ")
+			}
+			registered_names()
+			|> list.each(fn(a) {
+				io.println("[COORDINATOR]: registered atoms: " <> atom.to_string(a))
+			})
+
+			let selector = process.new_selector()
+				|> process.select(sub)
+				|> process.select_record(worker.Tag,
+										1,
+										handle_registration
+							)
+
+		}
     }
 
     Ok(init)
