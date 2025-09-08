@@ -1,4 +1,4 @@
-//import gleam/io
+import gleam/io
 import gleam/int
 import gleam/list
 import gleam/float
@@ -24,7 +24,7 @@ pub type Message {
 
     TryRegister(self_subject: process.Subject(Message))
 
-    RegisterWorker(worker_subject: process.Subject(Message))
+    RegisterWorker(worker_subject: process.Pid)
 
     Calculate(coord_sub: process.Subject(Message), k: Int, count: Int, start_num: Int)
 
@@ -37,6 +37,8 @@ pub fn send_rem(dst: atom.Atom, msg: Message) -> process.Pid
 @external(erlang, "global", "whereis_name")
 pub fn whereis_name(name: atom.Atom) -> process.Pid
 
+@external(erlang ,"global", "registered_names")
+pub fn registered_names() -> List(atom.Atom)
 
 pub fn start(
     remote_node: Option(node.Node)
@@ -51,10 +53,18 @@ pub fn start(
     |> actor.on_message(handle_worker_messages)
     |> actor.start 
 
+	io.println("[WORKER]: checking registered names")
+	process.sleep(1000)
+    registered_names()
+    |> list.each(fn(a) {
+        io.println("[WORKER]: registered atoms: " <> atom.to_string(a))
+    })
     let assert Ok(ret_sub) = ret
+    let assert Ok(pid) = process.subject_owner(ret_sub.data)
     case remote_node {
         Some(_node) -> {
-            send_rem(coord_name, RegisterWorker(ret_sub.data))  
+			io.println("[WORKER]: sending registration message")
+            send_rem(coord_name, RegisterWorker(pid))  
             Nil
         }
 

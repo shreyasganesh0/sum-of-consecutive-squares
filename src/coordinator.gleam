@@ -34,6 +34,9 @@ pub fn register_name(dst: atom.Atom, pid: process.Pid) -> atom.Atom
 @external(erlang ,"global", "registered_names")
 pub fn registered_names() -> List(atom.Atom)
 
+@external(erlang, "erlang", "send")
+pub fn send_global(dst: process.Pid, msg: worker.Message) -> worker.Message
+
 pub fn start(
     count: Int, 
     last_count: Int,
@@ -202,13 +205,13 @@ fn handle_coord_message(
             actor.stop()
         }
 
-        worker.RegisterWorker(worker_sub) -> {
+        worker.RegisterWorker(worker_pid) -> {
 
             case state.curr_idx < state.num_workers - 1 {
 
                 True -> {
 
-                    process.send(worker_sub, worker.Calculate(
+                    send_global(worker_pid, worker.Calculate(
                                                         coord_sub: state.sub, 
                                                         k: state.k,
                                                         count: state.count,
@@ -219,7 +222,7 @@ fn handle_coord_message(
 
                 False -> {
 
-                    process.send(worker_sub, worker.Calculate(
+                    send_global(worker_pid, worker.Calculate(
                                                         coord_sub: state.sub, 
                                                         k: state.k,
                                                         count: state.last_count,
