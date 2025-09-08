@@ -35,7 +35,7 @@ pub type Message {
 pub fn whereis(name: atom.Atom) -> process.Pid
 
 @external(erlang, "erlang", "send")
-pub fn send_rem(dst: #(atom.Atom, node.Node), msg: Message) -> process.Pid
+pub fn send_rem(dst: process.Pid, msg: Message) -> process.Pid
 
 pub fn start(
     remote_node: Option(node.Node)
@@ -53,7 +53,7 @@ pub fn start(
 
     let assert Ok(ret_sub) = ret
     case remote_node {
-        Some(node) -> {
+        Some(_node) -> {
             send_rem(coord_pid, RegisterWorker(ret_sub.data))  
             Nil
         }
