@@ -35,7 +35,7 @@ pub type Message {
 pub fn whereis(name: atom.Atom) -> process.Pid
 
 @external(erlang, "erlang", "send")
-pub fn send_rem(dst: process.Pid, msg: Message) -> process.Pid
+pub fn send_rem(dst: #(atom.Atom, node.Node), msg: Message) -> process.Pid
 
 pub fn start(
     remote_node: Option(node.Node)
@@ -44,7 +44,7 @@ pub fn start(
     //io.println("[WORKER]: start function started")
 
     let assert Ok(coord_name) = atom.get("coordinator")
-    let coord_pid = whereis(coord_name)
+    let _coord_pid = whereis(coord_name)
 
 
     let ret = actor.new(Nil)
@@ -53,8 +53,8 @@ pub fn start(
 
     let assert Ok(ret_sub) = ret
     case remote_node {
-        Some(_node) -> {
-            send_rem(coord_pid, RegisterWorker(ret_sub.data))  
+        Some(node) -> {
+            send_rem(#(coord_name, node), RegisterWorker(ret_sub.data))  
             Nil
         }
 
