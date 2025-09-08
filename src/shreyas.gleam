@@ -27,8 +27,7 @@ pub type ParseError {
     NodeError(error: node.ConnectError)
 }
 
-@external(erlang, "erlang", "register")
-pub fn register_global(name: atom.Atom, pid: process.Pid) -> Nil
+
 
 
 pub fn main() -> Result(Int, ParseError) {
@@ -305,10 +304,6 @@ pub fn calc_sum_of_squares(node_type: String,
                             main_sub,
                             True,
              )
-
-            let assert Ok(coord_sub) = crd
-            let assert Ok(coord_pid) = process.subject_owner(coord_sub.data)
-            register_global(atom.create("coordinator"), coord_pid)
 
             let bldr = supervisor.add(sup_build, supervision.worker(fn() {crd})
                                                 |> supervision.significant(True)

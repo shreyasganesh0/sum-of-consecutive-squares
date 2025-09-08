@@ -6,7 +6,7 @@ import gleam/list
 import gleam/otp/actor
 
 import gleam/erlang/process
-// import gleam/erlang/atom
+import gleam/erlang/atom
 //
 // import gleam/time/timestamp
 // import gleam/time/duration
@@ -28,6 +28,12 @@ type CoordState {
     )
 }
 
+@external(erlang, "global", "register_name")
+pub fn register_name(dst: atom.Atom, pid: process.Pid) -> atom.Atom
+
+@external(erlang ,"global", "registered_names")
+pub fn registered_names() -> List(atom.Atom)
+
 pub fn start(
     count: Int, 
     last_count: Int,
@@ -41,7 +47,8 @@ pub fn start(
         actor.StartError) {
 
 
-    //io.println("[COORDINATOR]: starting coordinator")
+    io.println("[COORDINATOR]: starting coordinator")
+
 
     let act = actor.new_with_initialiser(100000, fn(sub) {
                                                     init(
@@ -58,7 +65,12 @@ pub fn start(
                )
     |> actor.on_message(handle_coord_message)
     |> actor.start
+    io.println("[COORDINATOR]: start function end")
 
+    registered_names()
+    |> list.each(fn(a) {
+        io.println("[COORDINATOR]: registered atoms: " <> atom.to_string(a))
+    })
     act
 }
 
@@ -80,9 +92,9 @@ fn init(
         ) {
 
 
-    //io.println("[COORDINATOR]: init function started")
+    io.println("[COORDINATOR]: init function started")
 
-    //io.println("[COORDINATOR]: initalising with:\n" <> "count: " <> int.to_string(count) <> " last_count: " <> int.to_string(last_count) <> " k: " <>int.to_string(k) <> " num_workers: " <> int.to_string(num_workers))
+    io.println("[COORDINATOR]: initalising with:\n" <> "count: " <> int.to_string(count) <> " last_count: " <> int.to_string(last_count) <> " k: " <>int.to_string(k) <> " num_workers: " <> int.to_string(num_workers))
 
 
     let init_state = CoordState(
@@ -101,6 +113,19 @@ fn init(
     |> actor.returning(sub)
     //io.println("[COORDINATOR]: init function finished")
 
+    let assert Ok(pid) = process.subject_owner(sub)
+
+    case register_name(atom.create("shreyas_coordinator"), pid)
+    |> atom.to_string {
+        
+        "no" -> io.println("failed to register name")
+
+        "yes" -> io.println("registered coord name globally")
+
+        _ -> io.println("found random name ")
+    }
+
+    //let assert Ok(_) = process.register(pid, process.new_name("shreyas_coordinator"))
     case is_remote {
 
         False -> {
@@ -146,6 +171,8 @@ fn handle_coord_message(
     state: CoordState, 
     message: worker.Message
     ) -> actor.Next(CoordState, worker.Message) {
+
+    io.println("[COORDINATOR]: handling messsage")
 
     case message {
 
