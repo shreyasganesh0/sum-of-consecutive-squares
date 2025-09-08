@@ -70,6 +70,18 @@ pub fn start(
     |> actor.start
     io.println("[COORDINATOR]: start function end")
 
+    let assert Ok(sub) = act
+    let assert Ok(pid) = process.subject_owner(sub.data)
+
+    case register_name(atom.create("shreyas_coordinator"), pid)
+    |> atom.to_string {
+        
+        "no" -> io.println("failed to register name")
+
+        "yes" -> io.println("registered coord name globally")
+
+        _ -> io.println("found random name ")
+    }
     registered_names()
     |> list.each(fn(a) {
         io.println("[COORDINATOR]: registered atoms: " <> atom.to_string(a))
@@ -116,17 +128,6 @@ fn init(
     |> actor.returning(sub)
     //io.println("[COORDINATOR]: init function finished")
 
-    let assert Ok(pid) = process.subject_owner(sub)
-
-    case register_name(atom.create("shreyas_coordinator"), pid)
-    |> atom.to_string {
-        
-        "no" -> io.println("failed to register name")
-
-        "yes" -> io.println("registered coord name globally")
-
-        _ -> io.println("found random name ")
-    }
 
     //let assert Ok(_) = process.register(pid, process.new_name("shreyas_coordinator"))
     case is_remote {
@@ -205,6 +206,11 @@ fn handle_coord_message(
             actor.stop()
         }
 
+        worker.FinishedWork -> {
+            io.println("[COORDINATOR]: worker finished sending") 
+            actor.continue(state)
+        }
+
         worker.RegisterWorker(worker_pid) -> {
 
             case state.curr_idx < state.num_workers - 1 {
@@ -281,7 +287,8 @@ fn handle_coord_message(
 
         _ -> {
 
-            //io.println("[COORDINATOR]: recvd invalid message")
+            echo message
+            io.println("[COORDINATOR]: recvd invalid message")
             actor.continue(state)
         }
 
