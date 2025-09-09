@@ -22,6 +22,8 @@ pub type Message {
 
     Shutdown
 
+    TestMessage
+
     TryRegister(self_subject: process.Subject(Message))
 
     RegisterWorker(worker_subject: process.Pid)
@@ -47,7 +49,7 @@ pub fn start(
     //io.println("[WORKER]: start function started")
 
     let coord_name = atom.create("shreyas_coordinator")
-    let coord_pid = whereis_name(coord_name)
+    let _coord_pid = whereis_name(coord_name)
 
     let ret = actor.new(Nil)
     |> actor.on_message(handle_worker_messages)

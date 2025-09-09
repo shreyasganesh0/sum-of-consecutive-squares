@@ -1,6 +1,8 @@
 import gleam/io
 import gleam/int
 import gleam/list
+//import gleam/dynamic
+import gleam/dynamic/decode
 //import gleam/float
 
 import gleam/otp/actor
@@ -36,6 +38,15 @@ pub fn registered_names() -> List(atom.Atom)
 
 @external(erlang, "erlang", "send")
 pub fn send_global(dst: process.Pid, msg: worker.Message) -> worker.Message
+
+@external(erlang, "erlang", "list_to_pid")
+pub fn list_to_pid(term: String) -> process.Pid
+
+// @external(erlang, "gleam_stdlib", "identity")
+// fn unsafe_coerce(a: a) -> b
+//
+// @external(erlang, "erlang", "is_pid")
+// pub fn is_pid(term: dynamic.Dynamic) -> Bool
 
 pub fn start(
     count: Int, 
@@ -114,7 +125,7 @@ fn init(
 
 
     //let assert Ok(_) = process.register(pid, process.new_name("shreyas_coordinator"))
-    case is_remote {
+    let fin_init = case is_remote {
 
         False -> {
             list.index_map(worker_list, fn(worker_sub, curr_idx) {
@@ -146,7 +157,7 @@ fn init(
                                         #(worker_sub, curr_idx)
                                     }
             )
-            Nil
+            init
         }
 
         True -> {
@@ -168,16 +179,86 @@ fn init(
 			})
 
 			let selector = process.new_selector()
-				|> process.select(sub)
-				|> process.select_record(worker.Tag,
-										1,
-										handle_registration
-							)
+                           |> process.select_record(atom.create("RegisterWorker"),
+                                                    1,
+                                                    fn (msg) {
+                                                        handle_registration(msg,
+                                                                          num_workers,
+                                                                          k,
+                                                                          count,
+                                                                          last_count,
+                                                                          sub
+                                                       )
+                                                    },
+				              )
+            let final_init = actor.selecting(init, selector)
 
+            final_init
 		}
     }
 
-    Ok(init)
+    Ok(fin_init)
+}
+
+pub fn pid_decoder() -> decode.Decoder(process.Pid) {
+
+    let tmp_pid = process.spawn(fn() {Nil})
+    process.kill(tmp_pid)
+    decode.new_primitive_decoder("Pid", fn(data) {
+                                        
+                                            case decode.run(data, decode.string) { 
+                                           
+                                                Ok(pid_string) -> Ok(list_to_pid(pid_string))
+                                                Error(_) -> Error(tmp_pid)
+                                            }
+                                        }
+    )
+}
+
+fn handle_registration(msg,
+                      num_workers,
+                      k,
+                      count,
+                      last_count,
+                      sub
+    ) -> Message {
+
+
+    let assert Ok(worker_pid) = decode.run(msg, pid_decoder())
+
+    list.range(1, num_workers)
+    |> list.each(fn(curr_idx) {
+                    
+                    case curr_idx < num_workers - 1 {
+
+                        True -> {
+
+                            send_global(worker_pid, worker.Calculate(
+                                                                coord_sub: sub, 
+                                                                k: k,
+                                                                count: count,
+                                                                start_num: 1 + {curr_idx * count},
+                                                            )
+                            )
+                        }
+
+                        False -> {
+
+                            send_global(worker_pid, worker.Calculate(
+                                                                coord_sub: sub, 
+                                                                k: k,
+                                                                count: last_count,
+                                                                start_num: 1 + {curr_idx * count},
+                                                            )
+                            )
+                        }
+
+                    }
+                }
+        )
+    worker.TestMessage
+
+
 }
 
 fn handle_coord_message(
