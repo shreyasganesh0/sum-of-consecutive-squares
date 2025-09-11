@@ -33,8 +33,11 @@ pub type Message {
     Check(int_list: List(Int))
 }
 
+@external(erlang, "erlang", "send")
+pub fn send_global(dst: process.Pid, msg: #(atom.Atom, process.Pid)) -> #(atom.Atom, process.Pid)
+
 @external(erlang, "global", "send")
-pub fn send_rem(dst: atom.Atom, msg: Message) -> process.Pid
+pub fn send_rem(dst: atom.Atom, msg: #(atom.Atom, process.Pid)) -> process.Pid
 
 @external(erlang, "global", "whereis_name")
 pub fn whereis_name(name: atom.Atom) -> process.Pid
@@ -49,7 +52,7 @@ pub fn start(
     //io.println("[WORKER]: start function started")
 
     let coord_name = atom.create("shreyas_coordinator")
-    let _coord_pid = whereis_name(coord_name)
+    let coord_pid = whereis_name(coord_name)
 
     let ret = actor.new(Nil)
     |> actor.on_message(handle_worker_messages)
@@ -66,8 +69,10 @@ pub fn start(
     case remote_node {
         Some(_node) -> {
 			io.println("[WORKER]: sending registration message")
-            let reg_worker = atom.create("RegisterWorker")
-            send_rem(coord_name, #(Worker(reg_worker, pid)))  
+			//process.send(coord_pid, RegisterWorker(pid))
+			//send_global(coord_pid, RegisterWorker(pid))
+			let reg_worker = atom.create("RegisterWorker")
+            send_rem(coord_name, #(reg_worker, pid))  
             Nil
         }
 
