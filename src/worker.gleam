@@ -66,7 +66,8 @@ pub fn start(
     case remote_node {
         Some(_node) -> {
 			io.println("[WORKER]: sending registration message")
-            send_rem(coord_name, RegisterWorker(pid))  
+            let reg_worker = atom.create("RegisterWorker")
+            send_rem(coord_name, #(Worker(reg_worker, pid)))  
             Nil
         }
 

@@ -1,7 +1,7 @@
 import gleam/io
 import gleam/int
 import gleam/list
-//import gleam/dynamic
+import gleam/dynamic
 import gleam/dynamic/decode
 //import gleam/float
 
@@ -42,11 +42,11 @@ pub fn send_global(dst: process.Pid, msg: worker.Message) -> worker.Message
 @external(erlang, "erlang", "list_to_pid")
 pub fn list_to_pid(term: String) -> process.Pid
 
-// @external(erlang, "gleam_stdlib", "identity")
-// fn unsafe_coerce(a: a) -> b
+@external(erlang, "gleam_stdlib", "identity")
+fn unsafe_coerce(a: a) -> b
 //
-// @external(erlang, "erlang", "is_pid")
-// pub fn is_pid(term: dynamic.Dynamic) -> Bool
+@external(erlang, "erlang", "is_pid")
+pub fn is_pid(term: dynamic.Dynamic) -> Bool
 
 pub fn start(
     count: Int, 
@@ -203,13 +203,22 @@ fn init(
 pub fn pid_decoder() -> decode.Decoder(process.Pid) {
 
     let tmp_pid = process.spawn(fn() {Nil})
+    io.println("[COORDINATOR]: received message from worker in selector")
     process.kill(tmp_pid)
     decode.new_primitive_decoder("Pid", fn(data) {
-                                        
-                                            case decode.run(data, decode.string) { 
-                                           
-                                                Ok(pid_string) -> Ok(list_to_pid(pid_string))
-                                                Error(_) -> Error(tmp_pid)
+
+                                            case is_pid(data) {
+
+                                                True -> {
+
+                                                    let pid: process.Pid = unsafe_coerce(data)
+                                                    Ok(pid)
+                                                }
+
+                                                False -> {
+
+                                                    Error(tmp_pid)
+                                                }
                                             }
                                         }
     )
@@ -224,7 +233,9 @@ fn handle_registration(msg,
     ) -> Message {
 
 
-    let assert Ok(worker_pid) = decode.run(msg, pid_decoder())
+    echo msg
+    let assert Ok(worker_pid) = decode.run(msg, pid_decoder()|> decode.at([1], _))
+    io.println("[COORDINATOR]: received message from worker in selector")
 
     list.range(1, num_workers)
     |> list.each(fn(curr_idx) {
@@ -232,6 +243,7 @@ fn handle_registration(msg,
                     case curr_idx < num_workers - 1 {
 
                         True -> {
+                        io.println("[COORDINATOR]: sending work")
 
                             send_global(worker_pid, worker.Calculate(
                                                                 coord_sub: sub, 

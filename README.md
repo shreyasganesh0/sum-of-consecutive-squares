@@ -64,3 +64,15 @@ REAL TIME: 37.851144375s
 CPU TIME: 255.664s
 CPU TIME / REAL TIME Ratio: 6.754458926448245
 ```
+
+## Remote Nodes
+- start coordinator on erlang shell
+```
+erl -pa build/dev/erlang/*/ebin -name coord@<coordinator_ip> -setcookie secret_cookie -run shreyas main -- Coordinator 1000000 20 10
+```
+
+- start worker on erlang shell
+```
+erl -pa build/dev/erlang/*/ebin -name worker@<worker_ip> -setcookie secret_cookie -run shreyas main -- Worker 1000000 20 10 coord@<coordinator_ip>
+```
+
