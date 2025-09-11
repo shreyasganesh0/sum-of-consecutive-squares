@@ -39,12 +39,15 @@ pub fn registered_names() -> List(atom.Atom)
 @external(erlang, "erlang", "send")
 pub fn send_global(dst: process.Pid, msg: worker.Message) -> worker.Message
 
+@external(erlang, "erlang", "send")
+pub fn send_calculate(dst: process.Pid, msg: #(atom.Atom, Int, Int, Int)) -> #(atom.Atom, Int, Int, Int)
+
 @external(erlang, "erlang", "list_to_pid")
 pub fn list_to_pid(term: String) -> process.Pid
 
-@external(erlang, "gleam_stdlib", "identity")
-fn unsafe_coerce(a: a) -> b
-//
+// @external(erlang, "gleam_stdlib", "identity")
+// fn unsafe_coerce(a: a) -> b
+
 @external(erlang, "erlang", "is_pid")
 pub fn is_pid(term: dynamic.Dynamic) -> Bool
 
@@ -101,6 +104,10 @@ fn init(
         String,
         ) {
 
+        let _ = atom.create("shreyas_coordinator")
+        let _ = atom.create("RegisterWorker")
+        let _ = atom.create("Calculate")
+        let _ = atom.create("Check")
 
     io.println("[COORDINATOR]: init function started")
 
@@ -164,7 +171,8 @@ fn init(
 
 			let assert Ok(pid) = process.subject_owner(sub)
 
-			case register_name(atom.create("shreyas_coordinator"), pid)
+            let coord_name = atom.create("shreyas_coordinator")
+			case register_name(coord_name, pid)
 			|> atom.to_string {
 				
 				"no" -> io.println("failed to register name")
@@ -178,8 +186,10 @@ fn init(
 				io.println("[COORDINATOR]: registered atoms: " <> atom.to_string(a))
 			})
 
+            let reg_worker = atom.create("RegisterWorker")
+            let _check = atom.create("Check")
 			let selector = process.new_selector()
-                           |> process.select_record(atom.create("RegisterWorker"),
+                           |> process.select_record(reg_worker,
                                                     1,
                                                     fn (msg) {
                                                         handle_registration(msg,
@@ -187,7 +197,6 @@ fn init(
                                                                           k,
                                                                           count,
                                                                           last_count,
-                                                                          sub
                                                        )
                                                     },
 				              )
@@ -200,43 +209,20 @@ fn init(
     Ok(fin_init)
 }
 
-pub fn pid_decoder() -> decode.Decoder(process.Pid) {
-
-    let tmp_pid = process.spawn(fn() {Nil})
-    io.println("[COORDINATOR]: received message from worker in selector")
-    process.kill(tmp_pid)
-    decode.new_primitive_decoder("Pid", fn(data) {
-
-                                            case is_pid(data) {
-
-                                                True -> {
-
-                                                    let pid: process.Pid = unsafe_coerce(data)
-                                                    Ok(pid)
-                                                }
-
-                                                False -> {
-
-                                                    Error(tmp_pid)
-                                                }
-                                            }
-                                        }
-    )
-}
 
 fn handle_registration(msg,
                       num_workers,
                       k,
                       count,
                       last_count,
-                      sub
     ) -> Message {
 
 
     echo msg
-    let assert Ok(worker_pid) = decode.run(msg, pid_decoder()|> decode.at([1], _))
+    let assert Ok(worker_pid) = decode.run(msg, worker.pid_decoder()|> decode.at([1], _))
     io.println("[COORDINATOR]: received message from worker in selector")
 
+    let calc = atom.create("Calculate")
     list.range(1, num_workers)
     |> list.each(fn(curr_idx) {
                     
@@ -245,23 +231,23 @@ fn handle_registration(msg,
                         True -> {
                         io.println("[COORDINATOR]: sending work")
 
-                            send_global(worker_pid, worker.Calculate(
-                                                                coord_sub: sub, 
-                                                                k: k,
-                                                                count: count,
-                                                                start_num: 1 + {curr_idx * count},
-                                                            )
+                            send_calculate(worker_pid, #(
+                                                       calc,
+                                                       k,
+                                                       count,
+                                                       1 + {curr_idx * count},
+                                                    )
                             )
                         }
 
                         False -> {
 
-                            send_global(worker_pid, worker.Calculate(
-                                                                coord_sub: sub, 
-                                                                k: k,
-                                                                count: last_count,
-                                                                start_num: 1 + {curr_idx * count},
-                                                            )
+                            send_calculate(worker_pid, #(
+                                                     calc,
+                                                     k,
+                                                     last_count,
+                                                     1 + {curr_idx * count},
+                                                    )
                             )
                         }
 

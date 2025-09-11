@@ -235,7 +235,7 @@ pub fn calc_sum_of_squares_remote(node_type: String,
                     
                     let #(worker_list, sup_builder) = curr_tup 
 
-                    let wrk = worker.start(Some(remote_node))
+                    let wrk = worker.start(Some(remote_node), True)
                     let assert Ok(sub) = wrk
                     #(
                         [sub.data, ..worker_list],
@@ -322,7 +322,7 @@ pub fn calc_sum_of_squares(node_type: String,
                     
                     let #(worker_list, sup_builder) = curr_tup 
 
-                    let wrk = worker.start(None)
+                    let wrk = worker.start(None, False)
                     let assert Ok(sub) = wrk
                     #(
                         [sub.data, ..worker_list],
