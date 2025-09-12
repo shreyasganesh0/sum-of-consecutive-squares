@@ -187,7 +187,7 @@ fn init(
 			})
 
             let reg_worker = atom.create("RegisterWorker")
-            let _check = atom.create("Check")
+            let check = atom.create("Check")
 			let selector = process.new_selector()
                            |> process.select_record(reg_worker,
                                                     1,
@@ -200,6 +200,13 @@ fn init(
                                                        )
                                                     },
 				              )
+                           |> process.select_record(check,
+                                                    1,
+                                                    fn (msg) {
+                                                        handle_check(msg,
+                                                       )
+                                                    },
+				              )
             let final_init = actor.selecting(init, selector)
 
             final_init
@@ -207,6 +214,20 @@ fn init(
     }
 
     Ok(fin_init)
+}
+
+fn handle_check(msg) -> worker.Message {
+
+    let assert Ok(int_list) = decode.run(msg, decode.at([1], decode.list(decode.int)))
+
+    list.each(int_list, fn(a) {
+
+                            io.println(int.to_string(a))
+                        }
+    )
+
+    worker.TestMessage
+    
 }
 
 
