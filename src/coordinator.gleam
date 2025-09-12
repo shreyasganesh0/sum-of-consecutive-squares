@@ -104,11 +104,6 @@ fn init(
         String,
         ) {
 
-        let _ = atom.create("shreyas_coordinator")
-        let _ = atom.create("RegisterWorker")
-        let _ = atom.create("Calculate")
-        let _ = atom.create("Check")
-
     io.println("[COORDINATOR]: init function started")
 
     io.println("[COORDINATOR]: initalising with:\n" <> "count: " <> int.to_string(count) <> " last_count: " <> int.to_string(last_count) <> " k: " <>int.to_string(k) <> " num_workers: " <> int.to_string(num_workers))
@@ -193,10 +188,6 @@ fn init(
                                                     1,
                                                     fn (msg) {
                                                         handle_registration(msg,
-                                                                          num_workers,
-                                                                          k,
-                                                                          count,
-                                                                          last_count,
                                                        )
                                                     },
 				              )
@@ -218,64 +209,25 @@ fn init(
 
 fn handle_check(msg) -> worker.Message {
 
+    io.println("[COORDINATOR]: received check message from worker in selector")
     let assert Ok(int_list) = decode.run(msg, decode.at([1], decode.list(decode.int)))
 
-    list.each(int_list, fn(a) {
 
-                            io.println(int.to_string(a))
-                        }
-    )
-
-    worker.TestMessage
+    worker.Check(int_list)
     
 }
 
 
 fn handle_registration(msg,
-                      num_workers,
-                      k,
-                      count,
-                      last_count,
     ) -> Message {
 
 
-    echo msg
+    //echo msg
     let assert Ok(worker_pid) = decode.run(msg, worker.pid_decoder()|> decode.at([1], _))
-    io.println("[COORDINATOR]: received message from worker in selector")
+    //io.println("[COORDINATOR]: received message from worker in selector")
 
-    let calc = atom.create("Calculate")
-    list.range(1, num_workers)
-    |> list.each(fn(curr_idx) {
                     
-                    case curr_idx < num_workers - 1 {
-
-                        True -> {
-                        io.println("[COORDINATOR]: sending work")
-
-                            send_calculate(worker_pid, #(
-                                                       calc,
-                                                       k,
-                                                       count,
-                                                       1 + {curr_idx * count},
-                                                    )
-                            )
-                        }
-
-                        False -> {
-
-                            send_calculate(worker_pid, #(
-                                                     calc,
-                                                     k,
-                                                     last_count,
-                                                     1 + {curr_idx * count},
-                                                    )
-                            )
-                        }
-
-                    }
-                }
-        )
-    worker.TestMessage
+    worker.RegisterWorker(worker_pid)
 
 
 }
@@ -285,10 +237,15 @@ fn handle_coord_message(
     message: worker.Message
     ) -> actor.Next(CoordState, worker.Message) {
 
-    io.println("[COORDINATOR]: handling messsage")
-    echo message
+    // io.println("[COORDINATOR]: handling messsage")
+    // echo message
 
     case message {
+
+        worker.TestMessage -> {
+            //io.println("[COORDINATOR]: got test message")
+            actor.continue(state)
+        }
 
         worker.Shutdown -> {
 
@@ -323,27 +280,29 @@ fn handle_coord_message(
 
         worker.RegisterWorker(worker_pid) -> {
 
+            let calc = atom.create("Calculate")
             case state.curr_idx < state.num_workers - 1 {
 
                 True -> {
+                //io.println("[COORDINATOR]: sending work")
 
-                    send_global(worker_pid, worker.Calculate(
-                                                        coord_sub: state.sub, 
-                                                        k: state.k,
-                                                        count: state.count,
-                                                        start_num: 1 + {state.curr_idx * state.count},
-                                                    )
+                    send_calculate(worker_pid, #(
+                                               calc,
+                                               state.k,
+                                               state.count,
+                                               1 + {state.curr_idx * state.count},
+                                            )
                     )
                 }
 
                 False -> {
 
-                    send_global(worker_pid, worker.Calculate(
-                                                        coord_sub: state.sub, 
-                                                        k: state.k,
-                                                        count: state.last_count,
-                                                        start_num: 1 + {state.curr_idx * state.count},
-                                                    )
+                    send_calculate(worker_pid, #(
+                                             calc,
+                                             state.k,
+                                             state.last_count,
+                                             1 + {state.curr_idx * state.count},
+                                            )
                     )
                 }
 
