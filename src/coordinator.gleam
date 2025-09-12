@@ -286,6 +286,7 @@ fn handle_coord_message(
     ) -> actor.Next(CoordState, worker.Message) {
 
     io.println("[COORDINATOR]: handling messsage")
+    echo message
 
     case message {
 
