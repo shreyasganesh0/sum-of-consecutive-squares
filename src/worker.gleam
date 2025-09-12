@@ -56,32 +56,32 @@ pub fn is_pid(term: dynamic.Dynamic) -> Bool
 
 pub fn start(
     remote_node: Option(node.Node),
-    is_remote: Bool,
     ) -> Result(actor.Started(process.Subject(Message)), actor.StartError) {
 
     //io.println("[WORKER]: start function started")
 
-    let assert Ok(coord_name) = atom.get("shreyas_coordinator")
+    let coord_name = atom.create("shreyas_coordinator")
     let _coord_pid = whereis_name(coord_name)
 
-    let ret = actor.new_with_initialiser(10000, fn(sub) {init(sub, is_remote)})
+    let ret = actor.new_with_initialiser(10000, fn(sub) {init(sub, remote_node)})
     |> actor.on_message(handle_worker_messages)
     |> actor.start 
 
-	io.println("[WORKER]: checking registered names")
-	process.sleep(1000)
-    registered_names()
-    |> list.each(fn(a) {
-        io.println("[WORKER]: registered atoms: " <> atom.to_string(a))
-    })
-    let assert Ok(ret_sub) = ret
-    let assert Ok(pid) = process.subject_owner(ret_sub.data)
     case remote_node {
         Some(_node) -> {
+			io.println("[WORKER]: checking registered names")
+			process.sleep(1000)
+			registered_names()
+			|> list.each(fn(a) {
+				io.println("[WORKER]: registered atoms: " <> atom.to_string(a))
+			})
+			let assert Ok(ret_sub) = ret
+			let assert Ok(pid) = process.subject_owner(ret_sub.data)
+
 			io.println("[WORKER]: sending registration message")
 			//process.send(coord_pid, RegisterWorker(pid))
 			//send_global(coord_pid, RegisterWorker(pid))
-			let assert Ok(reg_worker) = atom.get("RegisterWorker")
+			let reg_worker = atom.create("RegisterWorker")
             send_pid(coord_name, #(reg_worker, pid))  
             Nil
         }
@@ -96,7 +96,7 @@ pub fn start(
 
 fn init(
     sub: process.Subject(Message),
-    is_remote: Bool,
+    remote_node: Option(node.Node),
     ) -> Result(
         actor.Initialised(
             Nil,
@@ -109,11 +109,11 @@ fn init(
     let init = actor.initialised(Nil)
     |> actor.returning(sub)
 
-    let fin_init = case is_remote {
+    let fin_init = case remote_node {
 
-        True -> {
+        Some(_) -> {
 
-            let assert Ok(calc) = atom.get("Calculate")
+            let calc = atom.create("Calculate")
 			let selector = process.new_selector()
                            |> process.select_record(calc,
                                                     3,
@@ -127,7 +127,7 @@ fn init(
             final_init
         }
 
-        False -> init
+        None -> init
 
     }
 
@@ -166,6 +166,8 @@ fn handle_calculations(
     msg: dynamic.Dynamic,
     ) -> Message {
 
+	io.println("[WORKER]: handling calculations")
+
     let assert Ok(#(k, count, start_num)) = {
         use k <- result.try(decode.run(msg, decode.at([1], decode.int)))
         use count <- result.try(decode.run(msg, decode.at([2], decode.int)))
@@ -176,6 +178,7 @@ fn handle_calculations(
     let ret_list = calc_sum_squares(k, count, start_num)
     let check = atom.create("Check")
     let coord_name = atom.create("shreyas_coordinator")
+	io.println("[WORKER]: sending calculations")
     send_intlist(coord_name, #(check, ret_list))
     FinishedWork
 
